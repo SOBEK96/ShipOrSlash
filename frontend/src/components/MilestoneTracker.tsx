@@ -3,7 +3,7 @@
 import { useCallback, useMemo, useState } from "react";
 import type { MilestoneStatus, VaultState, VerifierSources } from "@/lib/parse";
 import { formatBps, formatGen, formatUtc, shortHash } from "@/lib/format";
-import { canonHash, type MilestoneId } from "@/lib/protocol";
+import { canonHash, projectPending, type MilestoneId } from "@/lib/protocol";
 import { corroborate, probeSource, type SourceReading, type VerifyContext } from "@/lib/verify";
 import { Button, Card, Mono, Pill, SemverBadge, type Tone } from "./ui";
 
@@ -90,6 +90,10 @@ export function MilestoneTracker({
 
   const current = readings && readings.key === probeKey ? readings.list : null;
   const outcome = current ? corroborate(current) : null;
+  // Pending amounts are computed here with the contract's own integer rule
+  // (see projectPending), so the ledger never shows a number the contract would
+  // not pay. Accepted tranches show the amount the chain recorded.
+  const pending = projectPending(vault.deposited, vault.released, vault.tranchesDone);
 
   return (
     <div className="space-y-4">
@@ -127,8 +131,8 @@ export function MilestoneTracker({
         </dl>
 
         <ol className="divide-y divide-line rounded-md border border-line">
-          {vault.tranches.map((t) => (
-            <li key={t.milestoneId} className="grid grid-cols-[auto_1fr_auto] items-center gap-x-4 gap-y-1 px-3 py-2.5">
+          {vault.tranches.map((t, i) => (
+            <li key={`${vault.vaultId}:${t.milestoneId}`} className="grid grid-cols-[auto_1fr_auto] items-center gap-x-4 gap-y-1 px-3 py-2.5">
               <span
                 aria-hidden
                 className={`h-2.5 w-2.5 rounded-full ${
@@ -146,9 +150,17 @@ export function MilestoneTracker({
                 <p className="text-xs text-muted">
                   {t.status === "ACCEPTED" ? `Verified ${formatUtc(t.verifiedTs)}` : ruleFor(t.milestoneId)}
                 </p>
+                {t.status === "ACCEPTED" && t.commitSha ? (
+                  <p className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted">
+                    <span>commit</span>
+                    <Mono title={t.commitSha}>{t.commitSha.slice(0, 7)}</Mono>
+                    <span>artifact</span>
+                    <Mono title={t.artifactDigest}>{shortHash(t.artifactDigest, 14, 6)}</Mono>
+                  </p>
+                ) : null}
               </div>
               <div className="text-right">
-                <div className="font-mono text-sm font-semibold">{formatGen(t.amount)} GEN</div>
+                <div className="font-mono text-sm font-semibold">{formatGen(pending[i] ?? t.amount)} GEN</div>
                 <div className="text-xs text-muted">{formatBps(t.bps)} of the vault</div>
               </div>
             </li>

@@ -88,6 +88,8 @@ export interface Tranche {
   bps: number;
   status: TrancheStatus;
   releaseTag: string;
+  commitSha: string;
+  artifactDigest: string;
   verifiedTs: number;
   amount: bigint;
 }
@@ -138,6 +140,8 @@ function parseTranche(v: PlainValue, expectId: MilestoneId): Tranche {
     bps: int(o, "bps"),
     status: status as TrancheStatus,
     releaseTag: str(o, "release_tag"),
+    commitSha: str(o, "commit_sha"),
+    artifactDigest: str(o, "artifact_digest"),
     verifiedTs: int(o, "verified_ts"),
     amount: wei(o, "amount"),
   };
@@ -236,6 +240,8 @@ export interface MilestoneStatus {
   bps: number;
   status: TrancheStatus;
   releaseTag: string;
+  commitSha: string;
+  artifactDigest: string;
   previousTag: string;
   verifiedTs: number;
   amount: bigint;
@@ -260,6 +266,8 @@ export function parseMilestoneStatus(raw: unknown): MilestoneStatus {
     bps: int(o, "bps"),
     status: status as TrancheStatus,
     releaseTag: str(o, "release_tag"),
+    commitSha: str(o, "commit_sha"),
+    artifactDigest: str(o, "artifact_digest"),
     previousTag: str(o, "previous_tag"),
     verifiedTs: int(o, "verified_ts"),
     amount: wei(o, "amount"),
@@ -299,6 +307,8 @@ export interface ClaimResult {
   verifiedTs: number;
   released: bigint;
   accepted: boolean;
+  commitSha: string;
+  artifactDigest: string;
 }
 
 /** Decodes the dict `claim_milestone` returns. */
@@ -314,5 +324,7 @@ export function parseClaimResult(raw: unknown): ClaimResult {
     verifiedTs: int(o, "verified_ts"),
     released: wei(o, "released"),
     accepted: bool(o, "accepted"),
+    commitSha: str(o, "commit_sha"),
+    artifactDigest: str(o, "artifact_digest"),
   };
 }

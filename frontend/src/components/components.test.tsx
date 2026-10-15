@@ -37,9 +37,9 @@ const mk = (over: Partial<VaultState> = {}): VaultState => ({
   lastAttemptAt: 1_700_000_100,
   lastMilestone: 1,
   tranches: [
-    { milestoneId: 1, kind: "ALPHA", bps: 2000, status: "ACCEPTED", releaseTag: "v0.1.0-alpha.1", verifiedTs: 1760000001, amount: 10n ** 17n },
-    { milestoneId: 2, kind: "RC", bps: 3000, status: "PENDING", releaseTag: "", verifiedTs: 0, amount: 15n * 10n ** 16n },
-    { milestoneId: 3, kind: "STABLE", bps: 5000, status: "LOCKED", releaseTag: "", verifiedTs: 0, amount: 25n * 10n ** 16n },
+    { milestoneId: 1, kind: "ALPHA", bps: 2000, status: "ACCEPTED", releaseTag: "v0.1.0-alpha.1", commitSha: "1".repeat(40), artifactDigest: `sha256:${"a".repeat(64)}`, verifiedTs: 1760000001, amount: 10n ** 17n },
+    { milestoneId: 2, kind: "RC", bps: 3000, status: "PENDING", releaseTag: "", commitSha: "", artifactDigest: "", verifiedTs: 0, amount: 15n * 10n ** 16n },
+    { milestoneId: 3, kind: "STABLE", bps: 5000, status: "LOCKED", releaseTag: "", commitSha: "", artifactDigest: "", verifiedTs: 0, amount: 25n * 10n ** 16n },
   ],
   ...over,
 });
@@ -51,6 +51,8 @@ const ms = (id: 1 | 2 | 3, over: Partial<MilestoneStatus> = {}): MilestoneStatus
   bps: [2000, 3000, 5000][id - 1]!,
   status: id === 1 ? "ACCEPTED" : id === 2 ? "PENDING" : "LOCKED",
   releaseTag: "",
+  commitSha: "",
+  artifactDigest: "",
   previousTag: id === 2 ? "v0.1.0-alpha.1" : "",
   verifiedTs: 0,
   amount: 15n * 10n ** 16n,

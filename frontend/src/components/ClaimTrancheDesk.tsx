@@ -3,7 +3,7 @@
 import { useState } from "react";
 import type { MilestoneStatus, VaultState } from "@/lib/parse";
 import { formatDuration, formatGen, parseGen } from "@/lib/format";
-import { MIN_DEPOSIT, type MilestoneId } from "@/lib/protocol";
+import { MIN_DEPOSIT, nextReleaseAmount, type MilestoneId } from "@/lib/protocol";
 import type { TxNotice } from "@/lib/useConsole";
 import { explorerTxUrl, DEFAULT_NETWORK } from "@/lib/networks";
 import { Button, Card, Field, Pill, inputClass } from "./ui";
@@ -53,7 +53,9 @@ export function ClaimTrancheDesk({
     );
   }
 
-  const next = ([1, 2, 3] as MilestoneId[]).map((m) => milestones[m]).find((m) => m?.claimableNow);
+  const next = ([1, 2, 3] as MilestoneId[])
+    .map((m) => milestones[m])
+    .find((m) => m?.claimableNow && m.vaultId === vault.vaultId);
   const canAct = connected && (role === "funder" || role === "beneficiary") && busy === null;
   const pastDeadline = nowSeconds >= vault.deadline;
   const topUpWei = parseGen(topUp);
@@ -73,7 +75,10 @@ export function ClaimTrancheDesk({
             <>
               <p className="text-sm">
                 Next: <strong>tranche {next.milestoneId}</strong> ({next.kind}), worth{" "}
-                <span className="font-mono font-semibold">{formatGen(next.amount)} GEN</span>.
+                <span className="font-mono font-semibold">
+                  {formatGen(nextReleaseAmount(vault.deposited, vault.released, next.milestoneId))} GEN
+                </span>
+                .
               </p>
               <p className="mt-1 text-xs text-muted">
                 Verification reads three mirror files on three hosts. It costs a network fee even if the answer is

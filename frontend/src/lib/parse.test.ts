@@ -15,6 +15,8 @@ const tranche = (id: number, over: Record<string, unknown> = {}) => ({
   bps: [2000, 3000, 5000][id - 1],
   status: id === 1 ? "PENDING" : "LOCKED",
   release_tag: "",
+  commit_sha: "",
+  artifact_digest: "",
   verified_ts: 0,
   amount: ["100000000000000000", "150000000000000000", "250000000000000000"][id - 1],
   ...over,
@@ -201,6 +203,8 @@ describe("parseProtocolState and parseClaimResult", () => {
         verified_ts: verdict === 1 ? 1760000001 : 0,
         released: verdict === 1 ? "100" : "0",
         accepted: verdict === 1,
+        commit_sha: verdict === 1 ? "1".repeat(40) : "",
+        artifact_digest: verdict === 1 ? `sha256:${"a".repeat(64)}` : "",
       });
       expect(r.verdict).toBe(verdict);
     }
@@ -208,7 +212,7 @@ describe("parseProtocolState and parseClaimResult", () => {
 
   it("rejects an unknown verdict", () => {
     expect(() =>
-      parseClaimResult({ verdict: 7, milestone_id: 1, source_count: 0, release_tag: "", verified_ts: 0, released: "0", accepted: false }),
+      parseClaimResult({ verdict: 7, milestone_id: 1, source_count: 0, release_tag: "", verified_ts: 0, released: "0", accepted: false, commit_sha: "", artifact_digest: "" }),
     ).toThrow(ParseError);
   });
 });

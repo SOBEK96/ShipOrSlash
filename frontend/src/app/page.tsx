@@ -94,8 +94,9 @@ export default function Home() {
         </div>
 
         <div className="grid gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-          <MilestoneTracker vault={c.data.vault} sources={c.data.sources} milestones={c.data.milestones} />
+          <MilestoneTracker key={`tracker-${c.vaultId ?? "none"}`} vault={c.data.vault} sources={c.data.sources} milestones={c.data.milestones} />
           <ClaimTrancheDesk
+            key={`desk-${c.vaultId ?? "none"}`}
             vault={c.data.vault}
             milestones={c.data.milestones}
             role={c.role}

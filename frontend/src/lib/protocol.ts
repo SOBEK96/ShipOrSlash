@@ -43,6 +43,38 @@ export function trancheAmounts(deposited: bigint): [bigint, bigint, bigint] {
   return [c1, c2 - c1, c3 - c2];
 }
 
+/**
+ * What `claim_milestone` pays for tranche `tranche` right now: the cumulative
+ * entitlement at the current deposit, less everything already released. This is
+ * exactly the contract's `_cum_entitlement(deposited, k) - released`, and it
+ * differs from the tranche's nominal share after a top-up.
+ */
+export function nextReleaseAmount(deposited: bigint, released: bigint, tranche: 1 | 2 | 3): bigint {
+  return cumEntitlement(deposited, tranche) - released;
+}
+
+/**
+ * Amounts for every tranche that has not been accepted, mirroring the
+ * contract's `_tranche_view`: the next tranche pays its catch-up share
+ * (`nextReleaseAmount`), later ones show their nominal share. Accepted
+ * tranches are `null` -- their amount is whatever the chain recorded.
+ */
+export function projectPending(
+  deposited: bigint,
+  released: bigint,
+  tranchesDone: number,
+): [bigint | null, bigint | null, bigint | null] {
+  const out: (bigint | null)[] = [null, null, null];
+  for (const k of [1, 2, 3] as const) {
+    if (k <= tranchesDone) continue;
+    out[k - 1] =
+      k === tranchesDone + 1
+        ? nextReleaseAmount(deposited, released, k)
+        : cumEntitlement(deposited, k) - cumEntitlement(deposited, (k - 1) as 0 | 1 | 2);
+  }
+  return [out[0]!, out[1]!, out[2]!];
+}
+
 // --------------------------------------------------------------- SemVer ----
 export interface Semver {
   major: number;

@@ -18,7 +18,7 @@ import { Button, Card, Field, Pill, inputClass } from "./ui";
 
 /** Commit that holds the demo mirror fixtures. Override at build time with
  * NEXT_PUBLIC_FEED_PIN to point the defaults at another commit. */
-const PIN = process.env.NEXT_PUBLIC_FEED_PIN ?? "d332a2ed3f52ebe83c99233960a37598a41f96a4";
+const PIN = process.env.NEXT_PUBLIC_FEED_PIN ?? "2d32a3d0968cb48960374dcceb7a0f75434e4d59";
 const DEFAULT_FEEDS = {
   a: `https://raw.githubusercontent.com/SOBEK96/ShipOrSlash/${PIN}/deployments/mock_feeds/a/`,
   b: `https://cdn.jsdelivr.net/gh/SOBEK96/ShipOrSlash@${PIN}/deployments/mock_feeds/b/`,

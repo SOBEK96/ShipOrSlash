@@ -209,20 +209,37 @@ export class ShipOrSlashClient {
     return parseVerifierSources(await this.view("get_verifier_sources", [BigInt(vaultId)]));
   }
 
-  /** A SerialLoader over one vault's reads, keyed by item name. */
+  /**
+   * A SerialLoader over one vault's reads, keyed by item name. Every result is
+   * checked against the vault it was requested for: an answer that carries a
+   * different vault_id is a failed read, never a value, so it cannot be
+   * rendered under the wrong vault.
+   */
   vaultLoader(vaultId: number): SerialLoader<string, unknown> {
+    const same = (got: number, what: string) => {
+      if (got !== vaultId) throw new ParseError(`${what} answered for vault ${got}, asked for ${vaultId}`);
+    };
     return new SerialLoader<string, unknown>(async (key) => {
       switch (key) {
-        case "vault":
-          return this.vaultState(vaultId);
-        case "sources":
-          return this.verifierSources(vaultId);
+        case "vault": {
+          const v = await this.vaultState(vaultId);
+          same(v.vaultId, "get_vault_state");
+          return v;
+        }
+        case "sources": {
+          const s = await this.verifierSources(vaultId);
+          same(s.vaultId, "get_verifier_sources");
+          return s;
+        }
         case "m1":
-          return this.milestoneStatus(vaultId, 1);
         case "m2":
-          return this.milestoneStatus(vaultId, 2);
-        case "m3":
-          return this.milestoneStatus(vaultId, 3);
+        case "m3": {
+          const id = Number(key.slice(1)) as MilestoneId;
+          const m = await this.milestoneStatus(vaultId, id);
+          same(m.vaultId, "get_milestone_status");
+          if (m.milestoneId !== id) throw new ParseError(`milestone ${m.milestoneId} answered for ${id}`);
+          return m;
+        }
         default:
           throw new ParseError(`unknown item ${key}`);
       }

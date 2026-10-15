@@ -29,7 +29,7 @@ import path from "node:path";
 
 const CONTRACT_PATH = "contracts/ship_or_slash.py";
 const RECORD_PATH = "deployments/studio-next.json";
-const DEFAULT_PIN = "d332a2ed3f52ebe83c99233960a37598a41f96a4";
+const DEFAULT_PIN = "2d32a3d0968cb48960374dcceb7a0f75434e4d59";
 const SEED_WEI = 500_000_000_000_000_000n; // 0.5 GEN
 const DEADLINE_DAYS = 30;
 // Synthetic demo key: sha256 of the fingerprint the mock fixtures commit.
