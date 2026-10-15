@@ -3,31 +3,78 @@
   "chain_id": 61997,
   "rpc_url": "https://studio-next.genlayer.com/api",
   "explorer_base": "https://explorer-studio-next.genlayer.com",
-  "status": "CONTRACT_DEPLOYED__VAULT_SEED_AND_LIVE_CLAIM_PENDING",
-  "status_note": "The contract is deployed, finalized and read back live. The vault seed and the live claim_milestone need the mock feeds reachable on three CDN hosts, which requires the feeds commit to be pushed to GitHub. That push has not happened, so vault_id, seed_tx and claim_tx are null rather than invented.",
-  "contract_address": "0x059c675971F5c095BD9aa4B7C942DF7287BbcDc6",
-  "explorer_url": "https://explorer-studio-next.genlayer.com/address/0x059c675971F5c095BD9aa4B7C942DF7287BbcDc6",
+  "status": "LIVE_CONTRACT_SEEDED_AND_TRANCHE_1_ACCEPTED",
+  "contract_address": "0xe5578Ae6bc82767F86EC6Ff158A113bAF224E271",
+  "explorer_url": "https://explorer-studio-next.genlayer.com/address/0xe5578Ae6bc82767F86EC6Ff158A113bAF224E271",
   "source": "contracts/ship_or_slash.py",
-  "source_sha256": "4a73530ede1ba23e5cf78d051ccea1b5514a8b7e333bc7d0b36aa73a3e0f521a",
+  "source_sha256": "e4f10edc1eb196955238da1e20c6e65dbf780e327358f54c84fbe756526d0bf1",
   "source_matches_onchain": true,
   "runner": "py-genlayer:5jycge4q8k23462jtb0b9fyey1s9qz928sz2nbrd9mg4sxqg2qng",
-  "deploy_tx": "0x590a27da1f784b5612ffe0075de73f53b232c396e28911f51b41911872813f2a",
-  "deploy_tx_status": {
-    "status": "FINALIZED",
-    "execution": "FINISHED_WITH_RETURN",
-    "consensus_status_at_deploy": "ACCEPTED"
-  },
-  "deploy_fee_deposit_wei": "100000000000010352",
-  "superseded_attempts": [
-    {
-      "tx": "0x1754106e8ba9cea9becbba6caef16761169cf3fef052df0c6f806d0110189bfe",
-      "result": "reverted: FeeValueMustBeNonZero(1) (no fee object)"
+  "vault_id": 1,
+  "transactions": {
+    "deploy": {
+      "hash": "0x3fa8081ea5c4c60cf2cb27cc66a3e02baa3b3997a2ff147a7b4c727fa50ed94d",
+      "status": "FINALIZED",
+      "consensus_result": "MAJORITY_AGREE",
+      "execution_result": "FINISHED_WITH_RETURN",
+      "votes": {
+        "agree": 3,
+        "total": 5
+      },
+      "created_at": "2026-10-15T20:33:16.772295+00:00",
+      "from": "0x02988D77dA89002EF09B168B404e19dE3da4EdCC",
+      "to": "0xe5578Ae6bc82767F86EC6Ff158A113bAF224E271",
+      "value_wei": "0"
     },
-    {
-      "tx": "0x41886246ae6ce2727128b280628639527120fa2a58053ad210577b8e21bfc1ab",
-      "result": "reverted: FeeValueMustBeNonZero(1) (feeValue without distribution)"
+    "seed_vault": {
+      "hash": "0x600f6a8e38a6bac39abe76c5792654b85ab14af3b926359589041ce4d57573f5",
+      "status": "FINALIZED",
+      "consensus_result": "MAJORITY_AGREE",
+      "execution_result": "FINISHED_WITH_RETURN",
+      "votes": {
+        "agree": 3,
+        "total": 5
+      },
+      "created_at": "2026-10-15T20:36:31.814401+00:00",
+      "from": "0x02988D77dA89002EF09B168B404e19dE3da4EdCC",
+      "to": "0xe5578Ae6bc82767F86EC6Ff158A113bAF224E271",
+      "value_wei": "500000000000000000"
+    },
+    "claim_milestone_1": {
+      "hash": "0xeaac67228cfe177a6e64b673ff08a8b5ddfe551a381872435d3aabf01e30b92d",
+      "status": "FINALIZED",
+      "consensus_result": "MAJORITY_AGREE",
+      "execution_result": "FINISHED_WITH_RETURN",
+      "votes": {
+        "agree": 3,
+        "total": 5
+      },
+      "created_at": "2026-10-15T20:36:50.284783+00:00",
+      "from": "0x02988D77dA89002EF09B168B404e19dE3da4EdCC",
+      "to": "0xe5578Ae6bc82767F86EC6Ff158A113bAF224E271",
+      "value_wei": "0"
     }
-  ],
+  },
+  "deploy_tx": "0x3fa8081ea5c4c60cf2cb27cc66a3e02baa3b3997a2ff147a7b4c727fa50ed94d",
+  "seed_tx": "0x600f6a8e38a6bac39abe76c5792654b85ab14af3b926359589041ce4d57573f5",
+  "claim_tx": "0xeaac67228cfe177a6e64b673ff08a8b5ddfe551a381872435d3aabf01e30b92d",
+  "claim_status": "ACCEPTED",
+  "withdraw": {
+    "performed_by": "shiporslash-founder (beneficiary)",
+    "tx_hash": null,
+    "tx_hash_note": "Not captured: the CLI output carrying it was filtered away by the operator's shell pipeline. The execution is recorded by its effect on contract state below.",
+    "observed_effect": {
+      "withdrawn": "100000000000000000",
+      "withdrawable": "0",
+      "total_escrow": "400000000000000000"
+    },
+    "transfer_settlement": "PENDING: withdraw_released debits state first and queues emit_transfer(on='finalized'); contract_balance and the founder's balance move only after that transaction finalizes. See settlement_check."
+  },
+  "settlement_check": {
+    "status": "not yet observed at record time",
+    "contract_balance_wei_at_record": "500000000000000000",
+    "expected_after_settlement": "400000000000000000"
+  },
   "accounts": {
     "deployer": {
       "name": "shiporslash-deployer",
@@ -40,56 +87,198 @@
       "funded_via": "studio faucet sim_fundAccount, 1 GEN"
     }
   },
-  "faucet_note": "sim_fundAccount credits only when called with the EIP-55 checksummed address; lowercase requests were accepted (and returned a finalized tx hash) but credited nothing.",
   "mock_feeds": {
-    "commit": "d332a2ed3f52ebe83c99233960a37598a41f96a4",
-    "pushed_to_github": false,
-    "slot_a": "https://raw.githubusercontent.com/SOBEK96/ShipOrSlash/d332a2ed3f52ebe83c99233960a37598a41f96a4/deployments/mock_feeds/a/",
-    "slot_b": "https://cdn.jsdelivr.net/gh/SOBEK96/ShipOrSlash@d332a2ed3f52ebe83c99233960a37598a41f96a4/deployments/mock_feeds/b/",
-    "slot_c": "https://raw.githack.com/SOBEK96/ShipOrSlash/d332a2ed3f52ebe83c99233960a37598a41f96a4/deployments/mock_feeds/c/",
-    "cdn_http_status": null
+    "commit": "2d32a3d0968cb48960374dcceb7a0f75434e4d59",
+    "pushed_to_github": true,
+    "cdn_http_status": {
+      "raw.githubusercontent.com": 200,
+      "cdn.jsdelivr.net": 200,
+      "raw.githack.com": 200
+    },
+    "slot_a": "https://raw.githubusercontent.com/SOBEK96/ShipOrSlash/2d32a3d0968cb48960374dcceb7a0f75434e4d59/deployments/mock_feeds/a/",
+    "slot_b": "https://cdn.jsdelivr.net/gh/SOBEK96/ShipOrSlash@2d32a3d0968cb48960374dcceb7a0f75434e4d59/deployments/mock_feeds/b/",
+    "slot_c": "https://raw.githack.com/SOBEK96/ShipOrSlash/2d32a3d0968cb48960374dcceb7a0f75434e4d59/deployments/mock_feeds/c/"
   },
-  "vault_id": null,
-  "seed_tx": null,
-  "claim_tx": null,
   "readbacks": {
-    "get_constants": {
-      "bps_denominator": 10000,
-      "cumulative_bps": [
-        2000,
-        5000,
-        10000
-      ],
-      "max_window": 157680000,
-      "min_deposit": "1000000000000000",
-      "min_window": 86400,
-      "quorum": 2,
-      "schema": "shiporslash/v1",
-      "sources": 3,
-      "tranche_bps": [
-        2000,
-        3000,
-        5000
-      ],
-      "tranche_kinds": [
-        "ALPHA",
-        "RC",
-        "STABLE"
-      ]
-    },
     "get_protocol_state": {
-      "contract_balance": "0",
-      "next_vault_id": 1,
+      "contract_balance": "500000000000000000",
+      "next_vault_id": 2,
       "solvent": true,
-      "total_escrow": "0",
-      "total_released": "0",
+      "total_escrow": "500000000000000000",
+      "total_released": "100000000000000000",
       "total_slashed": "0",
-      "vault_count": 0
+      "vault_count": 1
     },
-    "get_whoami_as_deployer": "0x02988D77dA89002EF09B168B404e19dE3da4EdCC",
-    "get_vault_state": null,
-    "get_milestone_status": null,
-    "get_verifier_sources": null
+    "get_vault_state": {
+      "attempts": 1,
+      "beneficiary": "0xE24e3cD8f1b7dc8fBC5718F16334b89f88bdA670",
+      "created_at": 1792096591,
+      "deadline": 1794688585,
+      "deposited": "500000000000000000",
+      "docker_image": "sobek96/shiporslash",
+      "feeds": [
+        "https://raw.githubusercontent.com/SOBEK96/ShipOrSlash/2d32a3d0968cb48960374dcceb7a0f75434e4d59/deployments/mock_feeds/a/",
+        "https://cdn.jsdelivr.net/gh/SOBEK96/ShipOrSlash@2d32a3d0968cb48960374dcceb7a0f75434e4d59/deployments/mock_feeds/b/",
+        "https://raw.githack.com/SOBEK96/ShipOrSlash/2d32a3d0968cb48960374dcceb7a0f75434e4d59/deployments/mock_feeds/c/"
+      ],
+      "funder": "0x02988D77dA89002EF09B168B404e19dE3da4EdCC",
+      "last_attempt_at": 1792096610,
+      "last_milestone": 1,
+      "last_source_count": 3,
+      "last_verdict": 1,
+      "npm_package": "@sobek96/shiporslash",
+      "reclaimed": "0",
+      "released": "100000000000000000",
+      "repo_url": "https://github.com/sobek96/shiporslash",
+      "signer_hash": "d8a87fdcd4224662af9b788cae845191b3bc64b8155eb124fdbe0d506e4fcf10",
+      "status": "ACTIVE",
+      "tag_prefix": "v",
+      "tranches": [
+        {
+          "amount": "100000000000000000",
+          "artifact_digest": "sha256:e2d96cade72ea1e1d4c735f44b99fecde641440b550440725e63319be14e6b9b",
+          "bps": 2000,
+          "commit_sha": "1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a",
+          "kind": "ALPHA",
+          "milestone_id": 1,
+          "release_tag": "v0.1.0-alpha.1",
+          "status": "ACCEPTED",
+          "verified_ts": 1760086400
+        },
+        {
+          "amount": "150000000000000000",
+          "artifact_digest": "",
+          "bps": 3000,
+          "commit_sha": "",
+          "kind": "RC",
+          "milestone_id": 2,
+          "release_tag": "",
+          "status": "PENDING",
+          "verified_ts": 0
+        },
+        {
+          "amount": "250000000000000000",
+          "artifact_digest": "",
+          "bps": 5000,
+          "commit_sha": "",
+          "kind": "STABLE",
+          "milestone_id": 3,
+          "release_tag": "",
+          "status": "LOCKED",
+          "verified_ts": 0
+        }
+      ],
+      "tranches_done": 1,
+      "unreleased": "400000000000000000",
+      "vault_id": 1,
+      "withdrawable": "100000000000000000",
+      "withdrawn": "0"
+    },
+    "get_milestone_status": {
+      "1": {
+        "amount": "100000000000000000",
+        "artifact_digest": "sha256:e2d96cade72ea1e1d4c735f44b99fecde641440b550440725e63319be14e6b9b",
+        "bps": 2000,
+        "claimable_now": false,
+        "commit_sha": "1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a",
+        "kind": "ALPHA",
+        "milestone_id": 1,
+        "previous_tag": "",
+        "release_tag": "v0.1.0-alpha.1",
+        "source_urls": [
+          "https://raw.githubusercontent.com/SOBEK96/ShipOrSlash/2d32a3d0968cb48960374dcceb7a0f75434e4d59/deployments/mock_feeds/a/milestone_1.json",
+          "https://cdn.jsdelivr.net/gh/SOBEK96/ShipOrSlash@2d32a3d0968cb48960374dcceb7a0f75434e4d59/deployments/mock_feeds/b/milestone_1.json",
+          "https://raw.githack.com/SOBEK96/ShipOrSlash/2d32a3d0968cb48960374dcceb7a0f75434e4d59/deployments/mock_feeds/c/milestone_1.json"
+        ],
+        "status": "ACCEPTED",
+        "vault_id": 1,
+        "verified_ts": 1760086400
+      },
+      "2": {
+        "amount": "150000000000000000",
+        "artifact_digest": "",
+        "bps": 3000,
+        "claimable_now": true,
+        "commit_sha": "",
+        "kind": "RC",
+        "milestone_id": 2,
+        "previous_tag": "v0.1.0-alpha.1",
+        "release_tag": "",
+        "source_urls": [
+          "https://raw.githubusercontent.com/SOBEK96/ShipOrSlash/2d32a3d0968cb48960374dcceb7a0f75434e4d59/deployments/mock_feeds/a/milestone_2.json",
+          "https://cdn.jsdelivr.net/gh/SOBEK96/ShipOrSlash@2d32a3d0968cb48960374dcceb7a0f75434e4d59/deployments/mock_feeds/b/milestone_2.json",
+          "https://raw.githack.com/SOBEK96/ShipOrSlash/2d32a3d0968cb48960374dcceb7a0f75434e4d59/deployments/mock_feeds/c/milestone_2.json"
+        ],
+        "status": "PENDING",
+        "vault_id": 1,
+        "verified_ts": 0
+      },
+      "3": {
+        "amount": "250000000000000000",
+        "artifact_digest": "",
+        "bps": 5000,
+        "claimable_now": false,
+        "commit_sha": "",
+        "kind": "STABLE",
+        "milestone_id": 3,
+        "previous_tag": "",
+        "release_tag": "",
+        "source_urls": [
+          "https://raw.githubusercontent.com/SOBEK96/ShipOrSlash/2d32a3d0968cb48960374dcceb7a0f75434e4d59/deployments/mock_feeds/a/milestone_3.json",
+          "https://cdn.jsdelivr.net/gh/SOBEK96/ShipOrSlash@2d32a3d0968cb48960374dcceb7a0f75434e4d59/deployments/mock_feeds/b/milestone_3.json",
+          "https://raw.githack.com/SOBEK96/ShipOrSlash/2d32a3d0968cb48960374dcceb7a0f75434e4d59/deployments/mock_feeds/c/milestone_3.json"
+        ],
+        "status": "LOCKED",
+        "vault_id": 1,
+        "verified_ts": 0
+      }
+    },
+    "get_verifier_sources": {
+      "distinct_hosts": 3,
+      "distinct_operators": 3,
+      "docker_image": "sobek96/shiporslash",
+      "independent": true,
+      "npm_package": "@sobek96/shiporslash",
+      "quorum": 2,
+      "repo_url": "https://github.com/sobek96/shiporslash",
+      "signer_hash": "d8a87fdcd4224662af9b788cae845191b3bc64b8155eb124fdbe0d506e4fcf10",
+      "sources": [
+        {
+          "base_url": "https://raw.githubusercontent.com/SOBEK96/ShipOrSlash/2d32a3d0968cb48960374dcceb7a0f75434e4d59/deployments/mock_feeds/a/",
+          "host": "raw.githubusercontent.com",
+          "operator": "github",
+          "role": "GitHub release + signed-commit verifier",
+          "slot": "A"
+        },
+        {
+          "base_url": "https://cdn.jsdelivr.net/gh/SOBEK96/ShipOrSlash@2d32a3d0968cb48960374dcceb7a0f75434e4d59/deployments/mock_feeds/b/",
+          "host": "cdn.jsdelivr.net",
+          "operator": "jsdelivr",
+          "role": "Independent CI/CD status mirror",
+          "slot": "B"
+        },
+        {
+          "base_url": "https://raw.githack.com/SOBEK96/ShipOrSlash/2d32a3d0968cb48960374dcceb7a0f75434e4d59/deployments/mock_feeds/c/",
+          "host": "raw.githack.com",
+          "operator": "githack",
+          "role": "Package artifact / registry mirror",
+          "slot": "C"
+        }
+      ],
+      "vault_id": 1
+    }
   },
-  "recorded_at": "2026-10-15T19:40:00Z"
+  "findings": [
+    "Studio Next's transaction record has no resultName/statusName: status is a string, the consensus result is result_name / numeric result. The console's and the script's receipt checks read all three spellings and treat a name/number conflict as malformed.",
+    "sim_fundAccount credits only the EIP-55 checksummed address.",
+    "Writes and deploys need a full fee object (feeValue + distribution); a bare feeValue still reverts with FeeValueMustBeNonZero(1).",
+    "withdraw_released's fee estimate includes ~0.12 GEN of message fees for the queued transfer."
+  ],
+  "superseded": {
+    "note": "The first deployment ran the previous contract revision (validators compared the release tag only; get_vault_state mis-projected the next tranche after a top-up). It is left on-chain, unused, and was never seeded with a vault.",
+    "contract_address": "0x059c675971F5c095BD9aa4B7C942DF7287BbcDc6",
+    "deploy_tx": "0x590a27da1f784b5612ffe0075de73f53b232c396e28911f51b41911872813f2a",
+    "source_sha256": "4a73530ede1ba23e5cf78d051ccea1b5514a8b7e333bc7d0b36aa73a3e0f521a"
+  },
+  "recorded_at": "2026-10-15T21:00:00Z"
 }

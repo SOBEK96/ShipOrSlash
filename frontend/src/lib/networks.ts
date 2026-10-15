@@ -28,7 +28,7 @@ export const DEFAULT_NETWORK = STUDIO_NEXT;
 /** The deployed ShipOrSlash contract. Set NEXT_PUBLIC_SHIPORSLASH_ADDRESS to
  * point the console at a different instance without a code change. */
 export const CONTRACT_ADDRESS =
-  process.env.NEXT_PUBLIC_SHIPORSLASH_ADDRESS ?? "0x059c675971F5c095BD9aa4B7C942DF7287BbcDc6";
+  process.env.NEXT_PUBLIC_SHIPORSLASH_ADDRESS ?? "0xe5578Ae6bc82767F86EC6Ff158A113bAF224E271";
 
 export function explorerAddressUrl(net: NetworkConfig, address: string): string {
   return `${net.explorerUrl}/address/${address}`;

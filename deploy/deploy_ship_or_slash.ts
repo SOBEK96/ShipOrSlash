@@ -39,9 +39,16 @@ const INTERVAL_MS = 5000;
 
 interface Receipt {
   hash?: string;
+  // Studio Next populates these differently from the SDK's declared shape: the
+  // status is a string, and the consensus result is `result_name` / `result`
+  // with `resultName` absent. See assertFinal.
   statusName?: string;
+  status?: string | number;
   txExecutionResultName?: string;
+  txExecutionResult?: string | number;
   resultName?: string;
+  result_name?: string;
+  result?: string | number;
   data?: { contract_address?: string };
   txDataDecoded?: { contractAddress?: string };
   [k: string]: unknown;
@@ -79,17 +86,39 @@ interface Client {
   }): Promise<Receipt>;
 }
 
+// Mirror frontend/src/lib/receipt.ts (a test keeps the two maps identical).
+const STATUS_BY_NUMBER: Record<string, string> = {"0":"UNINITIALIZED","1":"PENDING","2":"PROPOSING","3":"COMMITTING","4":"REVEALING","5":"ACCEPTED","6":"UNDETERMINED","7":"FINALIZED","8":"CANCELED","9":"APPEAL_REVEALING","10":"APPEAL_COMMITTING","11":"VALIDATORS_TIMEOUT","12":"LEADER_TIMEOUT","13":"LEADER_REVEALING"};
+const EXEC_BY_NUMBER: Record<string, string> = {"0":"NOT_VOTED","1":"FINISHED_WITH_RETURN","2":"FINISHED_WITH_ERROR","3":"TIMEOUT","4":"NONDET_DISAGREE","5":"DETERMINISTIC_VIOLATION"};
+const RESULT_BY_NUMBER: Record<string, string> = {"0":"IDLE","1":"MAJORITY_AGREE","2":"MAJORITY_DISAGREE","3":"MAJORITY_TIMEOUT","4":"DETERMINISTIC_VIOLATION","5":"NO_MAJORITY"};
+
+/** One fact from its candidate name fields and its number; a conflict is an error. */
+function fact(label: string, names: unknown[], numeric: unknown, byNumber: Record<string, string>): string {
+  const found = new Set<string>();
+  for (const n of names) {
+    if (typeof n === "string" && n !== "") found.add(/^[0-9]+$/.test(n) ? (byNumber[n] ?? n) : n);
+  }
+  if (typeof numeric === "number" || (typeof numeric === "string" && /^[0-9]+$/.test(numeric))) {
+    const m = byNumber[String(numeric)];
+    if (m !== undefined) found.add(m);
+  }
+  if (found.size > 1) throw new Error(`${label} fields contradict each other: ${Array.from(found).join(" vs ")}`);
+  const v = found.values().next().value as string | undefined;
+  if (v === undefined) throw new Error(`${label} is missing from the receipt`);
+  return v;
+}
+
 /** Decided, executed to a return, and agreed by a majority -- all three. */
 function assertFinal(label: string, hash: string, r: Receipt): void {
   const problems: string[] = [];
-  if (r.statusName !== "ACCEPTED" && r.statusName !== "FINALIZED") {
-    problems.push(`status ${String(r.statusName)}`);
-  }
-  if (r.txExecutionResultName !== "FINISHED_WITH_RETURN") {
-    problems.push(`execution ${String(r.txExecutionResultName)}`);
-  }
-  if (r.resultName !== "MAJORITY_AGREE") {
-    problems.push(`consensus ${String(r.resultName)}`);
+  try {
+    const status = fact("status", [r.statusName, r.status], r.status, STATUS_BY_NUMBER);
+    if (status !== "ACCEPTED" && status !== "FINALIZED") problems.push(`status ${status}`);
+    const exec = fact("execution result", [r.txExecutionResultName], r.txExecutionResult, EXEC_BY_NUMBER);
+    if (exec !== "FINISHED_WITH_RETURN") problems.push(`execution ${exec}`);
+    const result = fact("consensus result", [r.resultName, r.result_name], r.result, RESULT_BY_NUMBER);
+    if (result !== "MAJORITY_AGREE") problems.push(`consensus ${result}`);
+  } catch (e) {
+    problems.push((e as Error).message);
   }
   if (problems.length > 0) {
     throw new Error(`${label} (${hash}) did not finalise cleanly: ${problems.join("; ")}`);
@@ -234,7 +263,7 @@ export default async function main(client: Client): Promise<string> {
   assertFinal("claim_milestone", claimHash, claimReceipt);
   console.log(`claim_milestone(${vaultId}, 1) decided (${claimHash})`);
   record.claim_tx = claimHash;
-  record.claim_status = claimReceipt.statusName;
+  record.claim_status = fact("status", [claimReceipt.statusName, claimReceipt.status], claimReceipt.status, STATUS_BY_NUMBER);
 
   // 4. Authoritative readbacks.
   const read = async (functionName: string, args: unknown[] = []) =>
