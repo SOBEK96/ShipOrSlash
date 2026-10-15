@@ -282,8 +282,22 @@ def _cum_entitlement(deposited: int, tranche: int) -> int:
     return deposited * CUM_BPS[tranche] // BPS_DENOM
 
 
-def _source_result(state: str, tag: str = "", commit: str = "", ts: int = 0) -> dict:
-    return {"state": state, "tag": tag, "commit": commit, "ts": ts}
+def _source_result(
+    state: str,
+    tag: str = "",
+    commit: str = "",
+    ts: int = 0,
+    registry: str = "",
+    digest: str = "",
+) -> dict:
+    return {
+        "state": state,
+        "tag": tag,
+        "commit": commit,
+        "ts": ts,
+        "registry": registry,
+        "digest": digest,
+    }
 
 
 def _classify_source(status, body, ctx: dict) -> dict:
@@ -371,8 +385,12 @@ def _classify_source(status, body, ctx: dict) -> dict:
     version = art.get("version")
     if version != tag[len(ctx["prefix"]):]:
         return failed
+    # One shipped build earns one tranche: the commit and the artifact digest
+    # of an accepted tranche can never satisfy a later one.
+    if commit in ctx["used_commits"] or digest in ctx["used_digests"]:
+        return failed
 
-    return _source_result(SRC_CONFIRMED, tag, commit, ts)
+    return _source_result(SRC_CONFIRMED, tag, commit, ts, str(registry), digest)
 
 
 def _aggregate(results: list, milestone_id: int) -> dict:
@@ -380,11 +398,16 @@ def _aggregate(results: list, milestone_id: int) -> dict:
 
     1. Tally every source into CONFIRMED / FAILED / NOT_FOUND / OUTAGE.
     2. Fewer than 2 sources answered -> QUORUM_FAILURE (retryable).
-    3. Two or more CONFIRMED records that agree on (tag, commit) -> VERIFIED.
+    3. Two or more CONFIRMED records that agree on the whole release identity
+       -- (tag, commit_sha, artifact registry, artifact digest) -> VERIFIED.
     4. Two or more sources that failed or are missing the tag -> REJECTED.
     5. Otherwise, if the unreachable source could still complete a 2-of-3
        quorum -> QUORUM_FAILURE; if no outstanding source can change the
        outcome (a conflict) -> REJECTED.
+
+    Returns {"payload": <the exact five-field verdict>, "commit_sha": str,
+    "artifact_digest": str}. The identity travels beside the payload so the
+    validators can compare it without widening the five-field verdict.
     """
     confirmed = [r for r in results if r["state"] == SRC_CONFIRMED]
     failed = len([r for r in results if r["state"] == SRC_FAILED])
@@ -392,39 +415,44 @@ def _aggregate(results: list, milestone_id: int) -> dict:
     outage = len([r for r in results if r["state"] == SRC_OUTAGE])
     responded = len(confirmed) + failed + missing
 
-    def payload(verdict: int, tag: str = "", ts: int = 0) -> dict:
+    def wrap(verdict: int, tag: str = "", ts: int = 0, commit: str = "", digest: str = "") -> dict:
         return {
-            "verdict": verdict,
-            "milestone_id": milestone_id,
-            "source_count": responded,
-            "release_tag": tag,
-            "verified_ts": ts,
+            "payload": {
+                "verdict": verdict,
+                "milestone_id": milestone_id,
+                "source_count": responded,
+                "release_tag": tag,
+                "verified_ts": ts,
+            },
+            "commit_sha": commit,
+            "artifact_digest": digest,
         }
 
     # Step 2: not enough witnesses to say anything.
     if responded < QUORUM:
-        return payload(VERDICT_QUORUM_FAILURE)
+        return wrap(VERDICT_QUORUM_FAILURE)
 
     # Step 3: corroborated confirmation. Group by the exact release identity.
     groups = {}
     for r in confirmed:
-        groups.setdefault((r["tag"], r["commit"]), []).append(r["ts"])
-    best_key = ("", "")
+        key = (r["tag"], r["commit"], r["registry"], r["digest"])
+        groups.setdefault(key, []).append(r["ts"])
+    best_key = ("", "", "", "")
     best_size = 0
     for key in sorted(groups):  # sorted: deterministic tie-break
         if len(groups[key]) > best_size:
             best_key, best_size = key, len(groups[key])
     if best_size >= QUORUM:
-        return payload(VERDICT_VERIFIED, best_key[0], min(groups[best_key]))
+        return wrap(VERDICT_VERIFIED, best_key[0], min(groups[best_key]), best_key[1], best_key[3])
 
     # Step 4: corroborated rejection.
     if failed + missing >= QUORUM:
-        return payload(VERDICT_REJECTED)
+        return wrap(VERDICT_REJECTED)
 
     # Step 5: the outstanding source decides, or nothing can.
     if outage >= 1 and (best_size + outage >= QUORUM or failed + missing + outage >= QUORUM):
-        return payload(VERDICT_QUORUM_FAILURE)
-    return payload(VERDICT_REJECTED)
+        return wrap(VERDICT_QUORUM_FAILURE)
+    return wrap(VERDICT_REJECTED)
 
 
 def _payload_ok(p, milestone_id: int) -> bool:
@@ -450,16 +478,41 @@ def _payload_ok(p, milestone_id: int) -> bool:
     return c >= QUORUM  # REJECTED needs two witnesses
 
 
-def _payloads_agree(lead: dict, mine: dict) -> bool:
-    """Validator equivalence: same milestone, same verdict, and for VERIFIED
-    the same release tag. source_count and verified_ts may differ because the
-    two nodes may have been served by different 2-of-3 subsets."""
-    if lead["milestone_id"] != mine["milestone_id"]:
+def _digest_ok(d) -> bool:
+    return isinstance(d, str) and d.startswith("sha256:") and _is_hex(d[7:], 64)
+
+
+def _result_ok(w, milestone_id: int) -> bool:
+    """The aggregate's wire shape: the five-field payload, plus a commit and an
+    artifact digest that are present exactly when the verdict is VERIFIED."""
+    if not isinstance(w, dict) or set(w.keys()) != {"payload", "commit_sha", "artifact_digest"}:
         return False
-    if lead["verdict"] != mine["verdict"]:
+    if not _payload_ok(w["payload"], milestone_id):
         return False
-    if lead["verdict"] == VERDICT_VERIFIED:
-        return lead["release_tag"] == mine["release_tag"]
+    commit, digest = w["commit_sha"], w["artifact_digest"]
+    if w["payload"]["verdict"] == VERDICT_VERIFIED:
+        return isinstance(commit, str) and _is_hex(commit, 40) and _digest_ok(digest)
+    return commit == "" and digest == ""
+
+
+def _results_agree(lead: dict, mine: dict) -> bool:
+    """Validator equivalence. Same milestone and verdict; and for VERIFIED the
+    same release tag, the same commit_sha and the same artifact digest. A
+    validator that independently reached a different commit or digest for the
+    same tag disagrees: the tag alone does not identify a release.
+    source_count and verified_ts may differ because the two nodes may have
+    been served by different 2-of-3 subsets."""
+    lp, mp = lead["payload"], mine["payload"]
+    if lp["milestone_id"] != mp["milestone_id"]:
+        return False
+    if lp["verdict"] != mp["verdict"]:
+        return False
+    if lp["verdict"] == VERDICT_VERIFIED:
+        return (
+            lp["release_tag"] == mp["release_tag"]
+            and lead["commit_sha"] == mine["commit_sha"]
+            and lead["artifact_digest"] == mine["artifact_digest"]
+        )
     return True
 
 
@@ -499,6 +552,12 @@ class Vault:
     tag_1: str
     tag_2: str
     tag_3: str
+    commit_1: str
+    commit_2: str
+    commit_3: str
+    digest_1: str
+    digest_2: str
+    digest_3: str
     ts_1: u256
     ts_2: u256
     ts_3: u256
@@ -548,19 +607,30 @@ class ShipOrSlash(gl.contract.Contract):
             amount = int(v.amt_1 if k == 1 else v.amt_2 if k == 2 else v.amt_3)
             tag = v.tag_1 if k == 1 else v.tag_2 if k == 2 else v.tag_3
             ts = int(v.ts_1 if k == 1 else v.ts_2 if k == 2 else v.ts_3)
+            commit = v.commit_1 if k == 1 else v.commit_2 if k == 2 else v.commit_3
+            digest = v.digest_1 if k == 1 else v.digest_2 if k == 2 else v.digest_3
         else:
             if v.status == ST_SLASHED:
                 status = "SLASHED"
             else:
                 status = "PENDING" if k == done + 1 else "LOCKED"
-            amount = _cum_entitlement(deposited, k) - _cum_entitlement(deposited, k - 1)
-            tag, ts = "", 0
+            if k == done + 1:
+                # Exactly what claim_milestone will pay: the cumulative
+                # entitlement at the CURRENT deposit, less what is already
+                # released. After a top-up this is larger than the
+                # tranche's nominal share, and the view must say so.
+                amount = _cum_entitlement(deposited, k) - int(v.released)
+            else:
+                amount = _cum_entitlement(deposited, k) - _cum_entitlement(deposited, k - 1)
+            tag, ts, commit, digest = "", 0, "", ""
         return {
             "milestone_id": k,
             "kind": TRANCHE_KIND[k],
             "bps": TRANCHE_BPS[k - 1],
             "status": status,
             "release_tag": tag,
+            "commit_sha": commit,
+            "artifact_digest": digest,
             "verified_ts": ts,
             "amount": str(amount),
         }
@@ -778,6 +848,8 @@ class ShipOrSlash(gl.contract.Contract):
             reclaimed=0,
             tranches_done=0,
             tag_1="", tag_2="", tag_3="",
+            commit_1="", commit_2="", commit_3="",
+            digest_1="", digest_2="", digest_3="",
             ts_1=0, ts_2=0, ts_3=0,
             amt_1=0, amt_2=0, amt_3=0,
             attempts=0,
@@ -830,6 +902,9 @@ class ShipOrSlash(gl.contract.Contract):
             "docker": v.docker_image,
             "milestone_id": k,
             "prev_tag": self._tag(v, k - 1) if k > 1 else "",
+            # Builds that already earned an earlier tranche cannot earn this one.
+            "used_commits": [c for c in (v.commit_1, v.commit_2, v.commit_3)[: k - 1] if c != ""],
+            "used_digests": [d for d in (v.digest_1, v.digest_2, v.digest_3)[: k - 1] if d != ""],
         }
         urls = [f"{base}milestone_{k}.json" for base in self._feeds(v)]
 
@@ -841,14 +916,15 @@ class ShipOrSlash(gl.contract.Contract):
             if not isinstance(leaders_res, gl.vm.Return):
                 return False  # leaders never raise; an error is disagreement
             lead = leaders_res.calldata
-            if not _payload_ok(lead, k):
+            if not _result_ok(lead, k):
                 return False
             mine = leader()
-            return _payloads_agree(lead, mine)
+            return _results_agree(lead, mine)
 
-        payload = gl.vm.run_nondet(leader, validator)
-        if not _payload_ok(payload, k):
+        outcome = gl.vm.run_nondet(leader, validator)
+        if not _result_ok(outcome, k):
             raise gl.vm.UserError(f"{ERR_PAYLOAD} verifier payload failed validation")
+        payload = outcome["payload"]
 
         verdict = int(payload["verdict"])
         v.attempts += 1
@@ -861,19 +937,25 @@ class ShipOrSlash(gl.contract.Contract):
         result["vault_id"] = int(vault_id)
         result["released"] = "0"
         result["accepted"] = False
+        result["commit_sha"] = ""
+        result["artifact_digest"] = ""
 
         if verdict == VERDICT_VERIFIED:
             amount = _cum_entitlement(int(v.deposited), k) - int(v.released)
             tag = payload["release_tag"]
-            # The accepted release tag and its verification timestamp are the
-            # on-chain record. The commit sha is corroborated across mirrors
-            # inside _aggregate but is not part of the fixed 5-field payload.
+            commit = outcome["commit_sha"]
+            digest = outcome["artifact_digest"]
+            ts = int(payload["verified_ts"])
+            # The accepted release identity is the on-chain record: tag, the
+            # commit it points at, and the artifact digest, all of which the
+            # validators agreed on. They are pinned here and checked against
+            # every later tranche (see used_commits / used_digests).
             if k == 1:
-                v.tag_1, v.ts_1, v.amt_1 = tag, int(payload["verified_ts"]), amount
+                v.tag_1, v.commit_1, v.digest_1, v.ts_1, v.amt_1 = tag, commit, digest, ts, amount
             elif k == 2:
-                v.tag_2, v.ts_2, v.amt_2 = tag, int(payload["verified_ts"]), amount
+                v.tag_2, v.commit_2, v.digest_2, v.ts_2, v.amt_2 = tag, commit, digest, ts, amount
             else:
-                v.tag_3, v.ts_3, v.amt_3 = tag, int(payload["verified_ts"]), amount
+                v.tag_3, v.commit_3, v.digest_3, v.ts_3, v.amt_3 = tag, commit, digest, ts, amount
             v.released += amount
             v.tranches_done = k
             if k == TRANCHES:
@@ -881,6 +963,8 @@ class ShipOrSlash(gl.contract.Contract):
             self.total_released += amount
             result["released"] = str(amount)
             result["accepted"] = True
+            result["commit_sha"] = commit
+            result["artifact_digest"] = digest
 
         self.vaults[vault_id] = v
         return result

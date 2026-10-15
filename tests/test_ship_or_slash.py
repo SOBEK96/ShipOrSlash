@@ -11,7 +11,8 @@ import json
 import pytest
 
 from conftest import (
-    ATTO, BASES, CUM, DAY, DEPOSIT, DOCKER, NPM, REPO, REPO_NORM, SIGNER_HASH,
+    ATTO, BASES, COMMITS, CUM, DAY, DEPOSIT, DIGEST_1, DIGEST_2, DIGEST_3, DIGESTS, DOCKER, NPM,
+    REPO, REPO_NORM, SIGNER_HASH,
     OTHER_SIGNER_HASH, SLOTS, TAGS, VERDICT_QF, VERDICT_REJECTED, VERDICT_VERIFIED,
     claim, create, credit_contract, feed_url, fund, future, hexaddr, mock_feeds,
     quorum_oracle, record, ship_all, warp_to,
@@ -511,10 +512,20 @@ def test_docker_artifact_target_is_accepted(world):
     assert r["verdict"] == VERDICT_VERIFIED
 
 
-def test_mixed_registry_mirrors_still_group_on_release_identity(world):
+def test_mirrors_attesting_different_registries_do_not_corroborate(world):
+    """An npm tarball digest and a docker image digest are different artifacts;
+    two mirrors that each vouch for a different one have not agreed."""
     vid = vault(world)
     r = claim(world.c, world.vm, world.bob, vid, 1, ("ok", "ok_docker", "503"))
-    assert r["verdict"] == VERDICT_VERIFIED and r["source_count"] == 2
+    assert r["verdict"] == VERDICT_QF  # no group of two, and the silent mirror could break the tie
+    r = claim(world.c, world.vm, world.bob, vid, 1, ("ok", "ok_docker", "404"))
+    assert r["verdict"] == VERDICT_REJECTED and r["released"] == "0"
+
+
+def test_two_of_three_on_one_registry_still_verifies_beside_a_dissenter(world):
+    vid = vault(world)
+    r = claim(world.c, world.vm, world.bob, vid, 1, ("ok", "ok_docker", "ok"))
+    assert r["verdict"] == VERDICT_VERIFIED and r["source_count"] == 3
 
 
 # --- conflicting confirmations ---------------------------------------------
@@ -1204,13 +1215,19 @@ def test_validator_rejects_verified_when_mirrors_say_missing(world):
     assert world.vm.run_validator() is False
 
 
+def wrapped(payload=None, commit=COMMITS[1], digest=DIGEST_1):
+    """The aggregate's wire shape: five-field payload plus release identity."""
+    p = {"verdict": 1, "milestone_id": 1, "source_count": 3, "release_tag": TAGS[1],
+         "verified_ts": 1760000001}
+    p.update(payload or {})
+    return {"payload": p, "commit_sha": commit, "artifact_digest": digest}
+
+
 def test_validator_rejects_inflated_leader_verdict(world):
     """A leader that fabricates VERIFIED cannot get a validator that sees 404s to agree."""
     vid = vault(world)
     claim(world.c, world.vm, world.bob, vid, 1, ("404", "404", "ok"))
-    forged = {"verdict": 1, "milestone_id": 1, "source_count": 3, "release_tag": TAGS[1],
-              "verified_ts": 1760000001}
-    assert world.vm.run_validator(leader_result=forged) is False
+    assert world.vm.run_validator(leader_result=wrapped()) is False
 
 
 def test_validator_rejects_quorum_failure_when_quorum_exists(world):
@@ -1250,9 +1267,47 @@ def test_validator_rejects_different_release_tag(world):
 
 def test_validator_ignores_source_count_and_timestamp_noise(world):
     verified_claim(world)
-    lead = {"verdict": 1, "milestone_id": 1, "source_count": 2, "release_tag": TAGS[1],
-            "verified_ts": 1760009999}
+    lead = wrapped({"source_count": 2, "verified_ts": 1760009999})
     assert world.vm.run_validator(leader_result=lead) is True
+
+
+def test_validator_agrees_with_the_exact_identity(world):
+    verified_claim(world)
+    assert world.vm.run_validator(leader_result=wrapped()) is True
+
+
+def test_validator_rejects_same_tag_with_a_different_commit(world):
+    """The tag alone does not identify a release: a leader that points the same
+    tag at another commit is not agreed with."""
+    verified_claim(world)
+    assert world.vm.run_validator(leader_result=wrapped(commit="f" * 40)) is False
+
+
+def test_validator_rejects_same_tag_with_a_different_artifact_digest(world):
+    verified_claim(world)
+    assert world.vm.run_validator(leader_result=wrapped(digest="sha256:" + "e" * 64)) is False
+
+
+def test_validator_that_sees_a_different_commit_disagrees(world):
+    verified_claim(world)
+    other = record(1, commit_sha="f" * 40)
+    mock_feeds(world.vm, 1, (other, other, other))
+    assert world.vm.run_validator() is False
+
+
+def test_validator_that_sees_a_different_digest_disagrees(world):
+    verified_claim(world)
+    art = dict(record(1)["artifact"], digest="sha256:" + "d" * 64)
+    other = record(1, artifact=art)
+    mock_feeds(world.vm, 1, (other, other, other))
+    assert world.vm.run_validator() is False
+
+
+def test_validator_agrees_when_only_the_timestamp_differs(world):
+    verified_claim(world)
+    other = record(1, verified_ts=1760099999)
+    mock_feeds(world.vm, 1, (other, other, other))
+    assert world.vm.run_validator() is True
 
 
 def test_validator_disagrees_with_a_leader_error(world):
@@ -1282,8 +1337,41 @@ def test_validator_disagrees_with_a_leader_error(world):
     "not a dict", None, [],
 ])
 def test_validator_rejects_malformed_leader_payload(world, bad):
+    """A malformed five-field payload, wrapped in an otherwise valid wrapper,
+    is rejected on the payload's own merits. Non-dict inputs are passed bare."""
+    verified_claim(world)
+    lead = bad if not isinstance(bad, dict) else {
+        "payload": bad, "commit_sha": COMMITS[1], "artifact_digest": DIGEST_1}
+    assert world.vm.run_validator(leader_result=lead) is False
+
+
+@pytest.mark.parametrize("bad", [
+    {"payload": wrapped()["payload"], "commit_sha": COMMITS[1]},  # no digest
+    {"payload": wrapped()["payload"], "artifact_digest": DIGEST_1},  # no commit
+    {**wrapped(), "extra": 1},
+    wrapped(commit=""),  # VERIFIED without a commit
+    wrapped(digest=""),  # VERIFIED without a digest
+    wrapped(commit="A" * 40),  # upper-case hex
+    wrapped(commit="a" * 39),
+    wrapped(digest="sha256:" + "a" * 63),
+    wrapped(digest="md5:" + "a" * 64),
+    wrapped(digest="a" * 64),  # no scheme prefix
+    wrapped(commit=7),
+    wrapped(digest=None),
+    wrapped({"verdict": 0, "source_count": 2, "release_tag": "", "verified_ts": 0}),  # identity on a non-VERIFIED
+    wrapped({"verdict": 2, "source_count": 1, "release_tag": "", "verified_ts": 0}),
+])
+def test_validator_rejects_malformed_identity(world, bad):
     verified_claim(world)
     assert world.vm.run_validator(leader_result=bad) is False
+
+
+def test_validator_accepts_a_wellformed_non_verified_wrapper_with_empty_identity(world):
+    vid = vault(world)
+    claim(world.c, world.vm, world.bob, vid, 1, ("404", "404", "ok"))
+    lead = {"payload": {"verdict": 0, "milestone_id": 1, "source_count": 3, "release_tag": "",
+                        "verified_ts": 0}, "commit_sha": "", "artifact_digest": ""}
+    assert world.vm.run_validator(leader_result=lead) is True
 
 
 # ====================================== adversarial / cross-vault ==========
@@ -1431,3 +1519,208 @@ def test_committed_fixtures_ship_all_three_tranches(world):
 def test_committed_fixtures_have_distinct_slot_timestamps():
     ts = {s: _fixture(s, 1)["verified_ts"] for s in ("a", "b", "c")}
     assert len(set(ts.values())) == 3  # three independent observations, not one copy
+
+
+# ============================================ release identity is recorded ==
+def art_with(m, **over):
+    return dict(record(m)["artifact"], **over)
+
+
+def test_accepted_tranche_records_commit_and_digest(world):
+    vid = vault(world)
+    r = claim(world.c, world.vm, world.bob, vid, 1)
+    assert r["commit_sha"] == COMMITS[1] and r["artifact_digest"] == DIGEST_1
+    t = world.c.get_vault_state(vid)["tranches"][0]
+    assert t["commit_sha"] == COMMITS[1] and t["artifact_digest"] == DIGEST_1
+    m = world.c.get_milestone_status(vid, 1)
+    assert m["commit_sha"] == COMMITS[1] and m["artifact_digest"] == DIGEST_1
+
+
+@pytest.mark.parametrize("states", [("404", "404", "ok"), ("503", "503", "ok"), ("missing", "ok", "404")])
+def test_unaccepted_outcome_records_no_identity(world, states):
+    vid = vault(world)
+    r = claim(world.c, world.vm, world.bob, vid, 1, states)
+    assert r["commit_sha"] == "" and r["artifact_digest"] == ""
+    t = world.c.get_vault_state(vid)["tranches"][0]
+    assert t["commit_sha"] == "" and t["artifact_digest"] == ""
+
+
+def test_all_three_tranches_record_distinct_identities(world):
+    vid = vault_at(world, 3)
+    ts = world.c.get_vault_state(vid)["tranches"]
+    assert [t["commit_sha"] for t in ts] == [COMMITS[1], COMMITS[2], COMMITS[3]]
+    assert [t["artifact_digest"] for t in ts] == [DIGEST_1, DIGEST_2, DIGEST_3]
+
+
+def test_two_mirrors_must_agree_on_the_artifact_digest(world):
+    """Same tag, same commit, different digests: no corroboration."""
+    vid = vault(world)
+    a = record(1, artifact=art_with(1, digest="sha256:" + "a" * 64))
+    b = record(1, artifact=art_with(1, digest="sha256:" + "b" * 64))
+    assert claim(world.c, world.vm, world.bob, vid, 1, (a, b, "404"))["verdict"] == VERDICT_REJECTED
+    assert claim(world.c, world.vm, world.bob, vid, 1, (a, b, "503"))["verdict"] == VERDICT_QF
+    # the third mirror breaks the tie in favour of the digest it agrees with
+    r = claim(world.c, world.vm, world.bob, vid, 1, (a, b, a))
+    assert r["verdict"] == VERDICT_VERIFIED and r["artifact_digest"] == "sha256:" + "a" * 64
+
+
+def test_two_mirrors_must_agree_on_the_commit(world):
+    vid = vault(world)
+    r = claim(world.c, world.vm, world.bob, vid, 1,
+              (record(1), record(1, commit_sha="c" * 40), record(1, commit_sha="c" * 40)))
+    assert r["verdict"] == VERDICT_VERIFIED and r["commit_sha"] == "c" * 40
+
+
+def test_a_commit_that_earned_a_tranche_cannot_earn_another(world):
+    vid = vault_at(world, 1)
+    again = tag_record(2, TAGS[2], commit_sha=COMMITS[1])
+    r = claim(world.c, world.vm, world.bob, vid, 2, (again, again, again))
+    assert r["verdict"] == VERDICT_REJECTED and r["released"] == "0"
+
+
+def test_an_artifact_digest_that_earned_a_tranche_cannot_earn_another(world):
+    vid = vault_at(world, 1)
+    again = record(2, artifact=art_with(2, digest=DIGEST_1))
+    r = claim(world.c, world.vm, world.bob, vid, 2, (again, again, again))
+    assert r["verdict"] == VERDICT_REJECTED
+
+
+def test_reuse_check_spans_every_earlier_tranche(world):
+    vid = vault_at(world, 2)
+    again = tag_record(3, TAGS[3], commit_sha=COMMITS[1])  # tranche 1's commit, offered for tranche 3
+    assert claim(world.c, world.vm, world.bob, vid, 3, (again, again, again))["verdict"] == VERDICT_REJECTED
+    again = record(3, artifact=art_with(3, digest=DIGEST_2))
+    assert claim(world.c, world.vm, world.bob, vid, 3, (again, again, again))["verdict"] == VERDICT_REJECTED
+    assert claim(world.c, world.vm, world.bob, vid, 3)["verdict"] == VERDICT_VERIFIED
+
+
+def test_a_fresh_build_is_accepted_after_a_reuse_attempt(world):
+    vid = vault_at(world, 1)
+    bad = tag_record(2, TAGS[2], commit_sha=COMMITS[1])
+    assert claim(world.c, world.vm, world.bob, vid, 2, (bad, bad, bad))["verdict"] == VERDICT_REJECTED
+    assert claim(world.c, world.vm, world.bob, vid, 2)["verdict"] == VERDICT_VERIFIED
+
+
+# ====================== projected tranche amounts equal what a claim pays ==
+def topup(w, vid, amount):
+    fund(w.vm, w.alice)
+    w.vm.sender = w.alice
+    w.vm.value = amount
+    try:
+        w.c.top_up_vault(vid)
+    finally:
+        w.vm.value = 0
+
+
+def _scenario(w, deposit, topups):
+    """Runs a vault through three claims, applying top-ups after the given
+    tranche counts, and records what the contract projected before each claim,
+    what preview_release said, and what the claim actually paid."""
+    vid = create(w.c, w.vm, w.alice, w.bob, value=deposit)
+    steps = []
+    for m in (1, 2, 3):
+        for t in topups:
+            if t["after"] == m - 1:
+                topup(w, vid, int(t["amount"]))
+        v = w.c.get_vault_state(vid)
+        projected = [t["amount"] for t in v["tranches"]]
+        preview = w.c.preview_release(vid, m)
+        r = claim(w.c, w.vm, w.bob, vid, m)
+        steps.append({
+            "tranche": m,
+            "deposited": v["deposited"],
+            "released_before": v["released"],
+            "projected_all": projected,
+            "projected": projected[m - 1],
+            "preview": preview,
+            "paid": r["released"],
+        })
+    return {"deposit": str(deposit), "topups": topups, "steps": steps}
+
+
+VECTOR_SCENARIOS = [
+    (1_000_000_000_000_000, []),
+    (1_000_000_000_000_001, []),
+    (1_000_000_000_000_003, []),
+    (123_456_789_012_345_678, []),
+    (10**18, []),
+    (700_000_000_000_000_001, []),
+    (3 * 10**18 + 7, []),
+    (2**64 + 1, []),
+    (10**18, [{"after": 1, "amount": str(10**18)}]),
+    (10**18, [{"after": 0, "amount": str(10**15 + 1)}]),
+    (10**18 + 3, [{"after": 1, "amount": "1000000000000007"}, {"after": 2, "amount": "2000000000000009"}]),
+    (5 * 10**17, [{"after": 2, "amount": str(10**18 + 11)}]),
+    (1_000_000_000_000_001, [{"after": 1, "amount": "1000000000000001"}]),
+]
+
+
+@pytest.mark.parametrize("deposit,topups", VECTOR_SCENARIOS,
+                         ids=[f"d{i}" for i in range(len(VECTOR_SCENARIOS))])
+def test_projection_equals_preview_equals_payout(world, deposit, topups):
+    sc = _scenario(world, deposit, topups)
+    total = deposit + sum(int(t["amount"]) for t in topups)
+    paid = 0
+    for st in sc["steps"]:
+        assert st["projected"] == st["preview"] == st["paid"], st
+        # the three tranche amounts shown always account for the whole deposit
+        assert sum(int(a) for a in st["projected_all"]) == int(st["deposited"])
+        paid += int(st["paid"])
+    assert paid == total
+    invariants(world.c)
+
+
+def test_view_amounts_sum_to_the_deposit_after_a_top_up(world):
+    vid = vault_at(world, 1)
+    topup(world, vid, DEPOSIT)
+    v = world.c.get_vault_state(vid)
+    assert sum(int(t["amount"]) for t in v["tranches"]) == int(v["deposited"]) == 2 * DEPOSIT
+    # the next tranche shows its catch-up share, and later ones their nominal share
+    assert int(v["tranches"][1]["amount"]) == 2 * DEPOSIT * 5000 // 10000 - DEPOSIT * 2000 // 10000
+    assert int(v["tranches"][2]["amount"]) == 2 * DEPOSIT - 2 * DEPOSIT * 5000 // 10000
+
+
+def test_parity_vectors_file_is_current(world):
+    """tests/vectors/tranche_parity.json is replayed by the frontend suite, so it
+    must be exactly what the contract produces. Regenerate with
+    SHIPORSLASH_REGEN_VECTORS=1."""
+    import os
+    path = os.path.join("tests", "vectors", "tranche_parity.json")
+    scenarios = []
+    for deposit, topups in VECTOR_SCENARIOS:
+        scenarios.append(_scenario(world, deposit, topups))
+        # fresh state per scenario: a new contract instance is not needed because
+        # vault ids are independent, and every vault is isolated.
+    doc = {"generated_by": "tests/test_ship_or_slash.py::test_parity_vectors_file_is_current",
+           "rule": "amount = deposited * cumulative_bps // 10000; next tranche pays that minus released",
+           "scenarios": scenarios}
+    if os.environ.get("SHIPORSLASH_REGEN_VECTORS") == "1":
+        with open(path, "w") as f:
+            json.dump(doc, f, indent=1, sort_keys=True)
+            f.write("\n")
+    with open(path) as f:
+        assert json.load(f) == json.loads(json.dumps(doc, sort_keys=True))
+
+
+@pytest.mark.parametrize("m", [1, 2, 3])
+def test_committed_fixtures_share_one_release_identity(m):
+    """Mirrors corroborate on (tag, commit, registry, digest): the demo feeds must
+    attest the same artifact on all three hosts or no quorum could ever form."""
+    recs = [_fixture(s, m) for s in ("a", "b", "c")]
+    ident = {(r["release_tag"], r["commit_sha"], r["artifact"]["registry"], r["artifact"]["digest"]) for r in recs}
+    assert len(ident) == 1
+
+
+def test_committed_fixtures_distinct_identity_per_tranche():
+    commits = {_fixture("a", m)["commit_sha"] for m in (1, 2, 3)}
+    digests = {_fixture("a", m)["artifact"]["digest"] for m in (1, 2, 3)}
+    assert len(commits) == 3 and len(digests) == 3  # one build earns one tranche
+
+
+def test_committed_fixtures_record_their_identity_on_chain(world):
+    vid = vault(world)
+    for m in (1, 2, 3):
+        recs = tuple(_fixture(s, m) for s in ("a", "b", "c"))
+        r = claim(world.c, world.vm, world.bob, vid, m, recs)
+        assert r["commit_sha"] == recs[0]["commit_sha"]
+        assert r["artifact_digest"] == recs[0]["artifact"]["digest"]

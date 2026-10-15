@@ -54,6 +54,14 @@ CUM = {0: 0, 1: 2000, 2: 5000, 3: 10000}
 VERDICT_REJECTED, VERDICT_VERIFIED, VERDICT_QF = 0, 1, 2
 
 
+def _digest(tag: str) -> str:
+    return "sha256:" + hashlib.sha256(tag.encode()).hexdigest()
+
+
+DIGEST_1, DIGEST_2, DIGEST_3 = (_digest(TAGS[m]) for m in (1, 2, 3))
+DIGESTS = {1: DIGEST_1, 2: DIGEST_2, 3: DIGEST_3}
+
+
 def feed_url(slot: str, milestone: int) -> str:
     return f"{BASES[slot]}milestone_{milestone}.json"
 
