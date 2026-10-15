@@ -1,0 +1,184 @@
+{
+  "contract": "ShipOrSlash",
+  "address": "0x059c675971F5c095BD9aa4B7C942DF7287BbcDc6",
+  "network": "studio-next",
+  "chain_id": 61997,
+  "schema": {
+    "ctor": {
+      "params": [],
+      "kwparams": {}
+    },
+    "methods": {
+      "claim_milestone": {
+        "params": [
+          [
+            "vault_id",
+            "int"
+          ],
+          [
+            "milestone_id",
+            "int"
+          ]
+        ],
+        "kwparams": {},
+        "readonly": false,
+        "ret": "dict",
+        "payable": false
+      },
+      "create_vault": {
+        "params": [
+          [
+            "beneficiary_hex",
+            "string"
+          ],
+          [
+            "repo_url",
+            "string"
+          ],
+          [
+            "signer_fp_hash",
+            "string"
+          ],
+          [
+            "tag_prefix",
+            "string"
+          ],
+          [
+            "npm_package",
+            "string"
+          ],
+          [
+            "docker_image",
+            "string"
+          ],
+          [
+            "feed_a",
+            "string"
+          ],
+          [
+            "feed_b",
+            "string"
+          ],
+          [
+            "feed_c",
+            "string"
+          ],
+          [
+            "deadline",
+            "int"
+          ]
+        ],
+        "kwparams": {},
+        "readonly": false,
+        "ret": "int",
+        "payable": true
+      },
+      "get_constants": {
+        "params": [],
+        "kwparams": {},
+        "readonly": true,
+        "ret": "dict"
+      },
+      "get_milestone_status": {
+        "params": [
+          [
+            "vault_id",
+            "int"
+          ],
+          [
+            "milestone_id",
+            "int"
+          ]
+        ],
+        "kwparams": {},
+        "readonly": true,
+        "ret": "dict"
+      },
+      "get_protocol_state": {
+        "params": [],
+        "kwparams": {},
+        "readonly": true,
+        "ret": "dict"
+      },
+      "get_vault_state": {
+        "params": [
+          [
+            "vault_id",
+            "int"
+          ]
+        ],
+        "kwparams": {},
+        "readonly": true,
+        "ret": "dict"
+      },
+      "get_verifier_sources": {
+        "params": [
+          [
+            "vault_id",
+            "int"
+          ]
+        ],
+        "kwparams": {},
+        "readonly": true,
+        "ret": "dict"
+      },
+      "preview_release": {
+        "params": [
+          [
+            "vault_id",
+            "int"
+          ],
+          [
+            "milestone_id",
+            "int"
+          ]
+        ],
+        "kwparams": {},
+        "readonly": true,
+        "ret": "string"
+      },
+      "reclaim_unreleased": {
+        "params": [
+          [
+            "vault_id",
+            "int"
+          ]
+        ],
+        "kwparams": {},
+        "readonly": false,
+        "ret": "string",
+        "payable": false
+      },
+      "top_up_vault": {
+        "params": [
+          [
+            "vault_id",
+            "int"
+          ]
+        ],
+        "kwparams": {},
+        "readonly": false,
+        "ret": "null",
+        "payable": true
+      },
+      "whoami": {
+        "params": [],
+        "kwparams": {},
+        "readonly": true,
+        "ret": "string"
+      },
+      "withdraw_released": {
+        "params": [
+          [
+            "vault_id",
+            "int"
+          ]
+        ],
+        "kwparams": {},
+        "readonly": false,
+        "ret": "string",
+        "payable": false
+      }
+    }
+  }
+}
