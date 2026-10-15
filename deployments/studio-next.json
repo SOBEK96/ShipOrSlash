@@ -1,0 +1,95 @@
+{
+  "network": "studio-next",
+  "chain_id": 61997,
+  "rpc_url": "https://studio-next.genlayer.com/api",
+  "explorer_base": "https://explorer-studio-next.genlayer.com",
+  "status": "CONTRACT_DEPLOYED__VAULT_SEED_AND_LIVE_CLAIM_PENDING",
+  "status_note": "The contract is deployed, finalized and read back live. The vault seed and the live claim_milestone need the mock feeds reachable on three CDN hosts, which requires the feeds commit to be pushed to GitHub. That push has not happened, so vault_id, seed_tx and claim_tx are null rather than invented.",
+  "contract_address": "0x059c675971F5c095BD9aa4B7C942DF7287BbcDc6",
+  "explorer_url": "https://explorer-studio-next.genlayer.com/address/0x059c675971F5c095BD9aa4B7C942DF7287BbcDc6",
+  "source": "contracts/ship_or_slash.py",
+  "source_sha256": "4a73530ede1ba23e5cf78d051ccea1b5514a8b7e333bc7d0b36aa73a3e0f521a",
+  "source_matches_onchain": true,
+  "runner": "py-genlayer:5jycge4q8k23462jtb0b9fyey1s9qz928sz2nbrd9mg4sxqg2qng",
+  "deploy_tx": "0x590a27da1f784b5612ffe0075de73f53b232c396e28911f51b41911872813f2a",
+  "deploy_tx_status": {
+    "status": "FINALIZED",
+    "execution": "FINISHED_WITH_RETURN",
+    "consensus_status_at_deploy": "ACCEPTED"
+  },
+  "deploy_fee_deposit_wei": "100000000000010352",
+  "superseded_attempts": [
+    {
+      "tx": "0x1754106e8ba9cea9becbba6caef16761169cf3fef052df0c6f806d0110189bfe",
+      "result": "reverted: FeeValueMustBeNonZero(1) (no fee object)"
+    },
+    {
+      "tx": "0x41886246ae6ce2727128b280628639527120fa2a58053ad210577b8e21bfc1ab",
+      "result": "reverted: FeeValueMustBeNonZero(1) (feeValue without distribution)"
+    }
+  ],
+  "accounts": {
+    "deployer": {
+      "name": "shiporslash-deployer",
+      "address": "0x02988D77dA89002EF09B168B404e19dE3da4EdCC",
+      "funded_via": "studio faucet sim_fundAccount, 3 GEN"
+    },
+    "founder": {
+      "name": "shiporslash-founder",
+      "address": "0xE24e3cD8f1b7dc8fBC5718F16334b89f88bdA670",
+      "funded_via": "studio faucet sim_fundAccount, 1 GEN"
+    }
+  },
+  "faucet_note": "sim_fundAccount credits only when called with the EIP-55 checksummed address; lowercase requests were accepted (and returned a finalized tx hash) but credited nothing.",
+  "mock_feeds": {
+    "commit": "d332a2ed3f52ebe83c99233960a37598a41f96a4",
+    "pushed_to_github": false,
+    "slot_a": "https://raw.githubusercontent.com/SOBEK96/ShipOrSlash/d332a2ed3f52ebe83c99233960a37598a41f96a4/deployments/mock_feeds/a/",
+    "slot_b": "https://cdn.jsdelivr.net/gh/SOBEK96/ShipOrSlash@d332a2ed3f52ebe83c99233960a37598a41f96a4/deployments/mock_feeds/b/",
+    "slot_c": "https://raw.githack.com/SOBEK96/ShipOrSlash/d332a2ed3f52ebe83c99233960a37598a41f96a4/deployments/mock_feeds/c/",
+    "cdn_http_status": null
+  },
+  "vault_id": null,
+  "seed_tx": null,
+  "claim_tx": null,
+  "readbacks": {
+    "get_constants": {
+      "bps_denominator": 10000,
+      "cumulative_bps": [
+        2000,
+        5000,
+        10000
+      ],
+      "max_window": 157680000,
+      "min_deposit": "1000000000000000",
+      "min_window": 86400,
+      "quorum": 2,
+      "schema": "shiporslash/v1",
+      "sources": 3,
+      "tranche_bps": [
+        2000,
+        3000,
+        5000
+      ],
+      "tranche_kinds": [
+        "ALPHA",
+        "RC",
+        "STABLE"
+      ]
+    },
+    "get_protocol_state": {
+      "contract_balance": "0",
+      "next_vault_id": 1,
+      "solvent": true,
+      "total_escrow": "0",
+      "total_released": "0",
+      "total_slashed": "0",
+      "vault_count": 0
+    },
+    "get_whoami_as_deployer": "0x02988D77dA89002EF09B168B404e19dE3da4EdCC",
+    "get_vault_state": null,
+    "get_milestone_status": null,
+    "get_verifier_sources": null
+  },
+  "recorded_at": "2026-10-15T19:40:00Z"
+}
