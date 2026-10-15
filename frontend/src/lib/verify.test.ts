@@ -12,6 +12,8 @@ const ctx = (m: 1 | 2 | 3 = 1, over: Partial<VerifyContext> = {}): VerifyContext
   docker: "sobek96/shiporslash",
   milestone: m,
   previousTag: "",
+  usedCommits: [],
+  usedDigests: [],
   ...over,
 });
 
@@ -87,7 +89,7 @@ describe("classifySource: transport", () => {
     const r = classifySource(200, body(rec(1)), ctx());
     expect(r.state).toBe("CONFIRMED");
     expect(r.tag).toBe("v0.1.0-alpha.1");
-    expect(r.ts).toBe(1760000001);
+    expect(r.ts).toBe(1760000001n);
   });
 });
 
@@ -154,13 +156,16 @@ describe("classifySource: lag is NOT_FOUND, not FAILED", () => {
 });
 
 describe("corroborate (direct port of _aggregate)", () => {
-  const c = (tag = "v0.1.0-alpha.1", commit = "1".repeat(40), ts = 10): SourceReading => ({ state: "CONFIRMED", tag, commit, ts, reason: "" });
-  const s = (state: SourceReading["state"]): SourceReading => ({ state, tag: "", commit: "", ts: 0, reason: "" });
+  const DIGEST = `sha256:${"a".repeat(64)}`;
+  const c = (tag = "v0.1.0-alpha.1", commit = "1".repeat(40), ts = 10n, digest = DIGEST, registry = "npm"): SourceReading => ({
+    state: "CONFIRMED", tag, commit, ts, registry, digest, reason: "",
+  });
+  const s = (state: SourceReading["state"]): SourceReading => ({ state, tag: "", commit: "", ts: 0n, registry: "", digest: "", reason: "" });
 
   it("verifies on two agreeing confirmations and takes the minimum timestamp", () => {
-    const r = corroborate([c("v1", "a", 50), c("v1", "a", 20), s("OUTAGE")]);
+    const r = corroborate([c("v1", "a", 50n), c("v1", "a", 20n), s("OUTAGE")]);
     expect(r.verdict).toBe(1);
-    expect(r.verifiedTs).toBe(20);
+    expect(r.verifiedTs).toBe(20n);
     expect(r.sourceCount).toBe(2);
   });
 
@@ -187,6 +192,36 @@ describe("corroborate (direct port of _aggregate)", () => {
 
   it("majority beats a dissenter", () => {
     expect(corroborate([c("v1", "a"), c("v1", "a"), c("v9", "z")]).verdict).toBe(1);
+  });
+
+  const D2 = `sha256:${"b".repeat(64)}`;
+
+  it("does not corroborate the same tag and commit with different artifact digests", () => {
+    const r = corroborate([c("v1", "a", 10n, DIGEST), c("v1", "a", 10n, D2), s("NOT_FOUND")]);
+    expect(r.verdict).toBe(0);
+    expect(r.conflict).toBe(true);
+  });
+
+  it("a digest conflict with a silent third mirror is retryable, not verified", () => {
+    const r = corroborate([c("v1", "a", 10n, DIGEST), c("v1", "a", 10n, D2), s("OUTAGE")]);
+    expect(r.verdict).toBe(2);
+    expect(r.conflict).toBe(true);
+  });
+
+  it("the third mirror can break a digest tie", () => {
+    const r = corroborate([c("v1", "a", 10n, DIGEST), c("v1", "a", 10n, D2), c("v1", "a", 10n, DIGEST)]);
+    expect(r.verdict).toBe(1);
+    expect(r.digest).toBe(DIGEST);
+    expect(r.conflict).toBe(true); // a dissenter exists even though the quorum holds
+  });
+
+  it("does not corroborate mirrors that attest different registries", () => {
+    expect(corroborate([c("v1", "a", 10n, DIGEST, "npm"), c("v1", "a", 10n, DIGEST, "docker"), s("NOT_FOUND")]).verdict).toBe(0);
+  });
+
+  it("reports the verified identity", () => {
+    const r = corroborate([c("v1", "a", 10n), c("v1", "a", 12n), s("OUTAGE")]);
+    expect([r.tag, r.commit, r.digest, r.conflict]).toEqual(["v1", "a", DIGEST, false]);
   });
 });
 

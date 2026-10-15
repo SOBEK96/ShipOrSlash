@@ -1,24 +1,29 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const calls: string[] = [];
+const written: { functionName: string; args?: unknown[]; value?: bigint }[] = [];
 let receipt: Record<string, unknown> = {};
 let readResult: unknown = null;
+/** Per-function read answers; falls back to `readResult`. */
+let readFor: Record<string, unknown> = {};
 const createClient = vi.fn();
 
-vi.mock("genlayer-js", () => ({
+vi.mock("genlayer-js", async () => ({
+  abi: ((await vi.importActual("genlayer-js")) as { abi: unknown }).abi,
   chains: { studioDevnet: { id: 61997, name: "studio", rpcUrls: { default: { http: ["https://old/"] } }, isStudio: true } },
   createClient: (cfg: Record<string, unknown>) => {
     createClient(cfg);
     return {
       readContract: async (a: { functionName: string }) => {
         calls.push(`read:${a.functionName}`);
-        return readResult;
+        return a.functionName in readFor ? readFor[a.functionName] : readResult;
       },
       estimateTransactionFeesForWrite: async (a: { functionName: string; value?: bigint }) => {
         calls.push(`estimate:${a.functionName}:${a.value ?? 0n}`);
         return { feeValue: 1n };
       },
-      writeContract: async (a: { functionName: string; fees?: unknown; value?: bigint }) => {
+      writeContract: async (a: { functionName: string; args?: unknown[]; fees?: unknown; value?: bigint }) => {
+        written.push({ functionName: a.functionName, args: a.args, value: a.value });
         calls.push(`write:${a.functionName}:${JSON.stringify(a.fees, (_k, v) => (typeof v === "bigint" ? v.toString() : v))}`);
         return "0xhash";
       },
@@ -50,9 +55,11 @@ const ok = { statusName: "ACCEPTED", txExecutionResultName: "FINISHED_WITH_RETUR
 
 beforeEach(() => {
   calls.length = 0;
+  written.length = 0;
   createClient.mockClear();
   receipt = { ...ok };
   readResult = null;
+  readFor = {};
 });
 
 describe("ShipOrSlashClient", () => {
@@ -104,7 +111,7 @@ describe("ShipOrSlashClient", () => {
       feedA: "https://a.example.org/",
       feedB: "https://b.example.net/",
       feedC: "https://c.example.io/",
-      deadline: 1_800_000_000,
+      deadlineDays: 30,
       deposit: 5n * 10n ** 17n,
     });
     expect(calls[0]).toBe(`estimate:create_vault:${5n * 10n ** 17n}`);
@@ -155,5 +162,132 @@ describe("ShipOrSlashClient", () => {
   it("fails clearly when the wallet returns no account", async () => {
     const c = new ShipOrSlashClient();
     await expect(c.connect(provider([]).p)).rejects.toBeInstanceOf(ContractUnavailableError);
+  });
+});
+
+// ---- create_vault: the id comes from the receipt, never from the count ----
+const FOUNDER = "0xE24e3cD8f1b7dc8fBC5718F16334b89f88bdA670";
+const REPO = "https://github.com/SOBEK96/ShipOrSlash";
+const input = {
+  beneficiary: FOUNDER,
+  repoUrl: REPO,
+  signerHash: "d".repeat(64),
+  tagPrefix: "v" as const,
+  npmPackage: "p",
+  dockerImage: "",
+  feedA: "https://a.example.org/",
+  feedB: "https://b.example.net/",
+  feedC: "https://c.example.io/",
+  deadlineDays: 30,
+  deposit: 5n * 10n ** 17n,
+};
+
+/** A get_vault_state answer, as the SDK would decode it. */
+const vaultView = (id: number, over: Record<string, unknown> = {}) => ({
+  vault_id: id, status: "ACTIVE", funder: ACCT_A.toLowerCase(), beneficiary: FOUNDER.toLowerCase(),
+  repo_url: "https://github.com/sobek96/shiporslash", signer_hash: "d".repeat(64), tag_prefix: "v",
+  npm_package: "p", docker_image: "", feeds: ["a", "b", "c"], deadline: 2_000_000_000, created_at: 1_700_000_000,
+  deposited: "500000000000000000", released: "0", withdrawn: "0", reclaimed: "0", withdrawable: "0",
+  unreleased: "500000000000000000", tranches_done: 0, attempts: 0, last_verdict: 0, last_source_count: 0,
+  last_attempt_at: 0, last_milestone: 0,
+  tranches: [1, 2, 3].map((m) => ({
+    milestone_id: m, kind: ["ALPHA", "RC", "STABLE"][m - 1], bps: [2000, 3000, 5000][m - 1], status: m === 1 ? "PENDING" : "LOCKED",
+    release_tag: "", commit_sha: "", artifact_digest: "", verified_ts: 0, amount: "1",
+  })),
+  ...over,
+});
+
+const receiptReturning = (readable: string) => ({
+  ...ok,
+  consensus_data: { leader_receipt: [{ mode: "leader", execution_result: "SUCCESS", result: { status: "return", payload: { readable } } }] },
+});
+
+describe("ShipOrSlashClient.createVault", () => {
+  it("returns the id the transaction returned, even when another creator moved the count", async () => {
+    receipt = receiptReturning("3");
+    readFor = {
+      // someone else created vaults 4..7 in the meantime: the global count is 7
+      get_protocol_state: new Map<string, unknown>([["vault_count", 7n]]),
+      get_vault_state: vaultView(3),
+    };
+    const c = new ShipOrSlashClient();
+    await c.connect(provider([ACCT_A]).p);
+    const out = await c.createVault(input);
+    expect(out.vaultId).toBe(3); // not 7
+    expect(calls).not.toContain("read:get_protocol_state"); // the count is never consulted
+  });
+
+  it("reads the id from the real captured receipt shape", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { join } = await import("node:path");
+    receipt = JSON.parse(readFileSync(join(__dirname, "__fixtures__", "create_vault_receipt.full.json"), "utf8"));
+    readFor = { get_vault_state: vaultView(1) };
+    const c = new ShipOrSlashClient();
+    await c.connect(provider([ACCT_A]).p);
+    expect((await c.createVault(input)).vaultId).toBe(1);
+  });
+
+  it.each([
+    ["a different creator", { funder: ACCT_B.toLowerCase() }],
+    ["a different repository", { repo_url: "https://github.com/someone/else" }],
+    ["a smaller deposit", { deposited: "1" }],
+    ["a different beneficiary", { beneficiary: ACCT_B.toLowerCase() }],
+  ])("refuses a receipt id that names a vault with %s", async (_n, over) => {
+    receipt = receiptReturning("2");
+    readFor = { get_vault_state: vaultView(2, over) };
+    const c = new ShipOrSlashClient();
+    await c.connect(provider([ACCT_A]).p);
+    await expect(c.createVault(input)).rejects.toThrow(/not the vault this transaction created/);
+  });
+
+  it("reports an unreadable receipt as an unknown id, and does not guess", async () => {
+    receipt = { ...ok }; // no consensus_data at all
+    readFor = { get_protocol_state: new Map<string, unknown>([["vault_count", 9n]]) };
+    const c = new ShipOrSlashClient();
+    await c.connect(provider([ACCT_A]).p);
+    const out = await c.createVault(input);
+    expect(out.vaultId).toBeNull();
+    expect(out.vaultIdProblem).toMatch(/leader result/);
+  });
+
+  it("sends a deadline from the chain's clock, with the skew buffer", async () => {
+    const realFetch = globalThis.fetch;
+    const chainNow = Math.floor(Date.now() / 1000) + 600; // chain 10 minutes ahead of this client
+    globalThis.fetch = (async () => ({
+      ok: true,
+      json: async () => ({ result: { timestamp: `0x${chainNow.toString(16)}` } }),
+    })) as unknown as typeof fetch;
+    try {
+      receipt = receiptReturning("1");
+      readFor = { get_vault_state: vaultView(1) };
+      const c = new ShipOrSlashClient();
+      await c.connect(provider([ACCT_A]).p);
+      const out = await c.createVault({ ...input, deadlineDays: 1 });
+      expect(out.deadline).toBe(chainNow + 86_400 + 3_600);
+      const w = written.find((x) => x.functionName === "create_vault")!;
+      expect(w.args![9]).toBe(BigInt(chainNow + 86_400 + 3_600));
+      expect(w.value).toBe(5n * 10n ** 17n);
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  });
+
+  it("falls back to the client clock when the chain's cannot be read", async () => {
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = (async () => {
+      throw new TypeError("Failed to fetch");
+    }) as unknown as typeof fetch;
+    try {
+      receipt = receiptReturning("1");
+      readFor = { get_vault_state: vaultView(1) };
+      const c = new ShipOrSlashClient();
+      await c.connect(provider([ACCT_A]).p);
+      const before = Math.floor(Date.now() / 1000);
+      const out = await c.createVault({ ...input, deadlineDays: 1 });
+      expect(out.deadline).toBeGreaterThanOrEqual(before + 86_400 + 3_600);
+      expect(out.deadline).toBeLessThanOrEqual(before + 86_400 + 3_600 + 5);
+    } finally {
+      globalThis.fetch = realFetch;
+    }
   });
 });

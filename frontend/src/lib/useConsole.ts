@@ -226,13 +226,32 @@ export function useConsole() {
   );
 
   const createVault = useCallback(
-    (input: CreateVaultInput) =>
-      run("Creating vault", null, () => client.createVault(input), "Vault created.", () => {
-        void client.protocolState().then((p) => {
-          setProtocol(p);
-          setSelected(p.vaultCount);
-        });
-      }),
+    (input: CreateVaultInput) => {
+      // The new vault's id is whatever create_vault RETURNED, read from this
+      // transaction's own receipt. It is never taken from the global vault
+      // count, which another creator may have advanced in the meantime.
+      let created: { vaultId: number | null; problem?: string } = { vaultId: null };
+      return run(
+        "Creating vault",
+        null,
+        async () => {
+          const out = await client.createVault(input);
+          created = { vaultId: out.vaultId, problem: out.vaultIdProblem };
+          return out;
+        },
+        "Vault created.",
+        () => {
+          if (created.vaultId !== null) {
+            setSelected(created.vaultId);
+          } else {
+            setNotice({
+              kind: "info",
+              message: `Vault created, but its id could not be read from the receipt (${created.problem ?? "unknown"}). Choose it from the vault list.`,
+            });
+          }
+        },
+      );
+    },
     [client, run],
   );
 
@@ -253,13 +272,13 @@ export function useConsole() {
   const withdraw = useCallback(() => {
     if (selected === null) return Promise.resolve();
     const id = selected;
-    return run("Withdrawing", id, () => client.withdrawReleased(id), "Withdrawal sent.");
+    return run("Withdrawing", id, () => client.withdrawReleased(id), "Withdrawal recorded on-chain. The payout is a separate network transfer: confirm it in your wallet balance. Studio Next has been observed not to deliver contract payouts.");
   }, [client, run, selected]);
 
   const reclaim = useCallback(() => {
     if (selected === null) return Promise.resolve();
     const id = selected;
-    return run("Slashing unshipped tranches", id, () => client.reclaimUnreleased(id), "Unshipped tranches returned to the funder.");
+    return run("Slashing unshipped tranches", id, () => client.reclaimUnreleased(id), "Slash recorded on-chain. The refund is a separate network transfer: confirm it in your wallet balance. Studio Next has been observed not to deliver contract payouts.");
   }, [client, run, selected]);
 
   const topUp = useCallback(

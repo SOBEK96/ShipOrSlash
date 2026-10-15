@@ -23,13 +23,13 @@ const STATE_TONE: Record<SourceReading["state"], Tone> = {
 
 const STATE_LABEL: Record<SourceReading["state"], string> = {
   CONFIRMED: "Confirms release",
-  FAILED: "Reports failure",
+  FAILED: "Invalid record",
   NOT_FOUND: "Not published yet",
   OUTAGE: "Unreachable",
 };
 
 const VERDICT_COPY: Record<number, { tone: Tone; text: string }> = {
-  0: { tone: "slash", text: "Rejected: two or more mirrors fail or lack the release." },
+  0: { tone: "slash", text: "Rejected: the contract would not release this tranche." },
   1: { tone: "ship", text: "Verified: two or more mirrors corroborate the same signed release." },
   2: { tone: "hold", text: "Retryable: the quorum cannot be reached yet. Nothing is penalised." },
 };
@@ -69,6 +69,9 @@ export function MilestoneTracker({
       docker: vault.dockerImage,
       milestone: next.milestoneId,
       previousTag: next.previousTag,
+      // Builds that already earned an earlier tranche cannot earn this one.
+      usedCommits: vault.tranches.filter((t) => t.milestoneId < next.milestoneId && t.commitSha !== "").map((t) => t.commitSha),
+      usedDigests: vault.tranches.filter((t) => t.milestoneId < next.milestoneId && t.artifactDigest !== "").map((t) => t.artifactDigest),
     };
     setProbing(true);
     const list: SourceReading[] = [];
@@ -229,6 +232,7 @@ export function MilestoneTracker({
                   }`}
                 >
                   Preview: {VERDICT_COPY[outcome.verdict]?.text} ({outcome.sourceCount} answered)
+                  {outcome.conflict ? " Mirrors disagree on the release identity (tag, commit, registry or artifact digest)." : ""}
                 </span>
               ) : next ? (
                 <span className="text-muted">Probe the mirrors to preview the quorum for tranche {next.milestoneId}.</span>

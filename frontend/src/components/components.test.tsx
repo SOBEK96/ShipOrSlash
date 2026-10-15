@@ -240,7 +240,7 @@ describe("ClaimTrancheDesk", () => {
 });
 
 describe("VaultCreator", () => {
-  const props = { account: "0x2bd806c97f0e00af1a1fc3328fa763a9269723c8", busy: null, onCreate: vi.fn(), nowSeconds: 1_800_000_000 };
+  const props = { account: "0x2bd806c97f0e00af1a1fc3328fa763a9269723c8", busy: null, onCreate: vi.fn() };
   const submit = () => screen.getByRole("button", { name: /Create vault and deposit/ }) as HTMLButtonElement;
 
   it("starts disabled until a beneficiary is entered", () => {
@@ -286,7 +286,7 @@ describe("VaultCreator", () => {
     expect(submit().disabled).toBe(true);
   });
 
-  it("submits the committed registry with the deadline offset from now", async () => {
+  it("submits the committed registry with the deadline as a number of days", async () => {
     const onCreate = vi.fn();
     render(<VaultCreator {...props} onCreate={onCreate} />);
     fireEvent.change(screen.getByPlaceholderText("0x…"), { target: { value: "0x81b637d8fcd2c6da6359e6963113a1170de795e4" } });
@@ -294,7 +294,9 @@ describe("VaultCreator", () => {
     fireEvent.click(submit());
     expect(onCreate).toHaveBeenCalledOnce();
     const input = onCreate.mock.calls[0]![0];
-    expect(input.deadline).toBe(1_800_000_000 + 30 * 86_400);
+    // the absolute deadline is computed at send time from the chain's clock
+    expect(input.deadlineDays).toBe(30);
+    expect("deadline" in input).toBe(false);
     expect(input.deposit).toBe(5n * 10n ** 17n);
     expect(input.signerHash).toBe("d8a87fdcd4224662af9b788cae845191b3bc64b8155eb124fdbe0d506e4fcf10");
     expect(input.tagPrefix).toBe("v");

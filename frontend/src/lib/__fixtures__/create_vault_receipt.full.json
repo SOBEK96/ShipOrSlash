@@ -1,0 +1,38 @@
+{
+  "hash": "0x600f6a8e38a6bac39abe76c5792654b85ab14af3b926359589041ce4d57573f5",
+  "status": 7,
+  "statusName": "FINALIZED",
+  "result": 1,
+  "result_name": "MAJORITY_AGREE",
+  "txExecutionResult": 1,
+  "txExecutionResultName": "FINISHED_WITH_RETURN",
+  "consensus_data": {
+    "leader_receipt": [
+      {
+        "mode": "leader",
+        "result": {
+          "raw": "AAk=",
+          "status": "return",
+          "payload": {
+            "raw": [
+              9
+            ],
+            "readable": "1"
+          }
+        },
+        "execution_result": "SUCCESS",
+        "vote": null
+      },
+      {
+        "mode": "validator",
+        "result": {
+          "raw": "AmlkbGU=",
+          "status": "contract_error",
+          "payload": "idle"
+        },
+        "execution_result": "ERROR",
+        "vote": "idle"
+      }
+    ]
+  }
+}

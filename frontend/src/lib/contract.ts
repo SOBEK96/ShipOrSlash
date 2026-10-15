@@ -25,6 +25,9 @@ import {
   type VaultState,
   type VerifierSources,
 } from "./parse";
+import { computeDeadline, fetchChainTime, DEADLINE_SKEW_BUFFER_S } from "./deadline";
+import { normalizeRepo } from "./protocol";
+import { vaultIdFromReceipt } from "./receiptValue";
 import { assertFinalReceipt, type ReceiptLike } from "./receipt";
 import { CONTRACT_ADDRESS, DEFAULT_NETWORK, type NetworkConfig } from "./networks";
 import { SerialLoader } from "./serialLoader";
@@ -57,6 +60,7 @@ interface SdkClient {
     waitUntil?: "decided" | "finalized";
     retries?: number;
     interval?: number;
+    fullTransaction?: boolean;
   }): Promise<ReceiptLike>;
 }
 
@@ -87,13 +91,33 @@ export interface CreateVaultInput {
   feedA: string;
   feedB: string;
   feedC: string;
-  deadline: number;
+  /** Whole days from now. The absolute deadline is computed at send time from
+   * the chain's clock, with a skew buffer (see deadline.ts). */
+  deadlineDays: number;
+  /** Override the default clock-skew buffer, in seconds. */
+  deadlineBufferS?: number;
   deposit: bigint;
 }
 
 export interface WriteOutcome {
   hash: string;
   receipt: ReceiptLike;
+}
+
+export interface CreateOutcome extends WriteOutcome {
+  /** The id `create_vault` returned, read from the receipt; null when the
+   * receipt could not be decoded. Never inferred from the global vault count. */
+  vaultId: number | null;
+  vaultIdProblem?: string;
+  /** The deadline that was submitted, in unix seconds. */
+  deadline: number;
+}
+
+export class VaultMismatchError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "VaultMismatchError";
+  }
 }
 
 const RETRIES = 120;
@@ -254,7 +278,12 @@ export class ShipOrSlashClient {
     return this.signer;
   }
 
-  private async send(functionName: string, args: unknown[], value = 0n): Promise<WriteOutcome> {
+  private async send(
+    functionName: string,
+    args: unknown[],
+    value = 0n,
+    opts: { fullTransaction?: boolean } = {},
+  ): Promise<WriteOutcome> {
     const signer = this.requireSigner();
     const account = this.accounts.current!;
     // The account the user approved with. If the wallet switches while we wait,
@@ -279,13 +308,29 @@ export class ShipOrSlashClient {
       waitUntil: "decided",
       retries: RETRIES,
       interval: INTERVAL_MS,
+      fullTransaction: opts.fullTransaction === true,
     });
     assertFinalReceipt(receipt);
     return { hash, receipt };
   }
 
-  createVault(input: CreateVaultInput): Promise<WriteOutcome> {
-    return this.send(
+  /** The chain's latest block time (seconds), or null if it cannot be read. */
+  chainTime(): Promise<number | null> {
+    return fetchChainTime(this.network.rpcUrl);
+  }
+
+  async createVault(input: CreateVaultInput): Promise<CreateOutcome> {
+    // Computed here, immediately before signing, from the later of the client's
+    // and the chain's clock: a deadline taken from a stale page clock is what
+    // makes a one-day vault miss the contract's minimum.
+    const deadline = computeDeadline({
+      days: input.deadlineDays,
+      clientNow: Math.floor(Date.now() / 1000),
+      chainNow: await this.chainTime(),
+      bufferS: input.deadlineBufferS ?? DEADLINE_SKEW_BUFFER_S,
+    });
+    const account = this.accounts.current;
+    const out = await this.send(
       "create_vault",
       [
         input.beneficiary,
@@ -297,10 +342,29 @@ export class ShipOrSlashClient {
         input.feedA,
         input.feedB,
         input.feedC,
-        BigInt(input.deadline),
+        BigInt(deadline),
       ],
       input.deposit,
+      { fullTransaction: true },
     );
+
+    // The id comes from the transaction's own return value ...
+    const read = await vaultIdFromReceipt(out.receipt);
+    if (!read.ok) return { ...out, vaultId: null, vaultIdProblem: read.reason, deadline };
+    // ... and is checked against what it names before anyone is sent there.
+    const v = await this.vaultState(read.id);
+    const wantRepo = normalizeRepo(input.repoUrl);
+    if (
+      v.funder.toLowerCase() !== account ||
+      v.repoUrl !== wantRepo ||
+      v.deposited < input.deposit ||
+      v.beneficiary.toLowerCase() !== input.beneficiary.toLowerCase()
+    ) {
+      throw new VaultMismatchError(
+        `The receipt names vault ${read.id}, which is not the vault this transaction created. Check the explorer.`,
+      );
+    }
+    return { ...out, vaultId: read.id, deadline };
   }
 
   topUpVault(vaultId: number, value: bigint): Promise<WriteOutcome> {

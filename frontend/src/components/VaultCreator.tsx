@@ -30,12 +30,10 @@ export function VaultCreator({
   account,
   busy,
   onCreate,
-  nowSeconds,
 }: {
   account: string | null;
   busy: string | null;
   onCreate: (input: CreateVaultInput) => void;
-  nowSeconds: number;
 }) {
   const [beneficiary, setBeneficiary] = useState("");
   const [deposit, setDeposit] = useState("0.5");
@@ -121,7 +119,7 @@ export function VaultCreator({
       feedA,
       feedB,
       feedC,
-      deadline: nowSeconds + check.days * 86_400,
+      deadlineDays: check.days,
       deposit: check.dep,
     });
   }
@@ -213,7 +211,11 @@ export function VaultCreator({
         </fieldset>
 
         <div className="flex flex-wrap items-end justify-between gap-4">
-          <Field label="Deadline (days from now)" error={check.daysError} hint="After this, the funder may slash unshipped tranches.">
+          <Field
+            label="Deadline (days from now)"
+            error={check.daysError}
+            hint="After this, the funder may slash unshipped tranches. One hour is added so the deadline clears the one-day minimum after network delay."
+          >
             <input className={`${inputClass} w-28`} inputMode="numeric" value={days} onChange={(e) => setDays(e.target.value.trim())} />
           </Field>
           <Button type="submit" tone="primary" disabled={!valid || busy !== null}>

@@ -36,6 +36,8 @@ const script = {
   read: (_id: number, _key: string): Promise<unknown> => Promise.resolve(null),
   reads: [] as string[],
   claim: (_id: number): Promise<{ hash: string }> => Promise.resolve({ hash: "0xhash" }),
+  create: (): Promise<{ hash: string; vaultId: number | null; vaultIdProblem?: string; deadline: number }> =>
+    Promise.resolve({ hash: "0xc", vaultId: 1, deadline: 0 }),
 };
 
 vi.mock("./contract", async () => {
@@ -64,7 +66,7 @@ vi.mock("./contract", async () => {
     withdrawReleased = async () => ({ hash: "0x" });
     reclaimUnreleased = async () => ({ hash: "0x" });
     topUpVault = async () => ({ hash: "0x" });
-    createVault = async () => ({ hash: "0x" });
+    createVault = async () => script.create();
     connect = async () => "0x";
     disconnect = () => undefined;
   }
@@ -85,6 +87,7 @@ beforeEach(() => {
   script.reads = [];
   script.read = okRead;
   script.claim = () => Promise.resolve({ hash: "0xhash" });
+  script.create = () => Promise.resolve({ hash: "0xc", vaultId: 1, deadline: 0 });
 });
 afterEach(() => {
   vi.useRealTimers();
@@ -174,6 +177,49 @@ describe("useConsole: vault isolation", () => {
     act(() => result.current.selectVault(2));
     await flush();
     expect(result.current.data.vault).toBeUndefined();
+  });
+});
+
+describe("useConsole: creating a vault", () => {
+  const input = { beneficiary: "0x", repoUrl: "", signerHash: "", tagPrefix: "v" as const, npmPackage: "", dockerImage: "",
+    feedA: "", feedB: "", feedC: "", deadlineDays: 30, deposit: 1n };
+
+  it("selects the id the transaction returned, not the newest vault", async () => {
+    // protocolState() in the fake reports vaultCount 2: another creator's vault is the newest.
+    script.create = () => Promise.resolve({ hash: "0xc", vaultId: 1, deadline: 0 });
+    const { result } = renderHook(() => useConsole());
+    await flush();
+    await act(async () => {
+      await result.current.createVault(input);
+    });
+    await flush();
+    expect(result.current.vaultId).toBe(1);
+  });
+
+  it("does not guess when the id could not be read", async () => {
+    script.create = () => Promise.resolve({ hash: "0xc", vaultId: null, vaultIdProblem: "no leader result", deadline: 0 });
+    const { result } = renderHook(() => useConsole());
+    act(() => result.current.selectVault(2));
+    await flush();
+    await act(async () => {
+      await result.current.createVault(input);
+    });
+    await flush();
+    expect(result.current.vaultId).toBe(2); // selection unchanged
+    expect(result.current.notice?.kind).toBe("info");
+    expect(result.current.notice?.message).toMatch(/could not be read from the receipt/);
+  });
+
+  it("surfaces a mismatch as an error and selects nothing", async () => {
+    script.create = () => Promise.reject(new Error("The receipt names vault 4, which is not the vault this transaction created."));
+    const { result } = renderHook(() => useConsole());
+    await flush();
+    await act(async () => {
+      await result.current.createVault(input);
+    });
+    await flush();
+    expect(result.current.vaultId).toBeNull();
+    expect(result.current.notice?.kind).toBe("error");
   });
 });
 

@@ -97,9 +97,16 @@ def record(milestone: int, **over) -> dict:
     return rec
 
 
+class Raw(str):
+    """A mirror body served byte-for-byte, so a test can control exactly how a
+    number is spelled (json.dumps would normalise 1.0 and 1e0 away)."""
+
+
 def _resp(state, milestone: int):
     """Translate a per-source state spec into a mock response, or None for 'no
     mock registered' (the harness raises, which the contract reads as OUTAGE)."""
+    if isinstance(state, Raw):
+        return {"status": 200, "body": str(state)}
     if isinstance(state, dict):
         return {"status": 200, "body": json.dumps(state)}
     if state == "ok":

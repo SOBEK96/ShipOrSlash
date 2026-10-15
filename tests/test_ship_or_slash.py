@@ -7,6 +7,7 @@ independent oracle in conftest, not against the contract's own helpers.
 
 import itertools
 import json
+import os
 
 import pytest
 
@@ -15,7 +16,7 @@ from conftest import (
     REPO, REPO_NORM, SIGNER_HASH,
     OTHER_SIGNER_HASH, SLOTS, TAGS, VERDICT_QF, VERDICT_REJECTED, VERDICT_VERIFIED,
     claim, create, credit_contract, feed_url, fund, future, hexaddr, mock_feeds,
-    quorum_oracle, record, ship_all, warp_to,
+    Raw, quorum_oracle, record, ship_all, warp_to,
 )
 
 MIN_DEPOSIT = ATTO // 1000
@@ -1724,3 +1725,249 @@ def test_committed_fixtures_record_their_identity_on_chain(world):
         r = claim(world.c, world.vm, world.bob, vid, m, recs)
         assert r["commit_sha"] == recs[0]["commit_sha"]
         assert r["artifact_digest"] == recs[0]["artifact"]["digest"]
+
+
+# ============================================ vault ids: sequential, atomic ==
+def test_identical_creations_get_distinct_strictly_increasing_ids(world):
+    """Same creator, same repo, same registry, same block clock: the ids are
+    still unique. The counter is read and advanced inside one transaction, so
+    there is no interleaving to collide in."""
+    warp_to(world.vm, 1_800_000_000)
+    ids = [vault(world, deadline=1_800_000_000 + 30 * DAY) for _ in range(25)]
+    assert ids == list(range(1, 26))
+    assert len(set(ids)) == 25
+    states = [world.c.get_vault_state(i) for i in ids]
+    assert {s["created_at"] for s in states} == {1_800_000_000}  # truly identical inputs
+    assert [s["vault_id"] for s in states] == ids
+
+
+def test_returned_id_is_the_vault_that_was_created(world):
+    """create_vault returns the id; the receipt carries it, so a client never has
+    to infer it from a global count."""
+    seen = []
+    for who in (world.alice, world.charlie, world.alice, world.charlie, world.alice):
+        vid = create(world.c, world.vm, who, world.bob)
+        v = world.c.get_vault_state(vid)
+        assert v["funder"] == hexaddr(world.c, world.vm, who)  # the id belongs to its creator
+        seen.append(vid)
+    assert seen == [1, 2, 3, 4, 5]
+    assert world.c.get_protocol_state()["vault_count"] == 5
+
+
+# ===================================== clock skew on the vault minimum window ==
+T0 = 1_800_000_000
+
+
+def _create_at(w, client_now, deadline, block_now):
+    warp_to(w.vm, block_now)
+    return create(w.c, w.vm, w.alice, w.bob, deadline=deadline)
+
+
+def test_minimum_window_has_no_signature_age_check_to_widen(world):
+    """The contract has one 'one day' constant, and it bounds the vault DEADLINE.
+    There is no signature validity window: a mirror's verified_ts is only
+    required to be a positive integer."""
+    vid = vault(world)
+    for ts in (1, 1_000_000, 2**40):  # ancient and far-future both accepted
+        rec = record(1, verified_ts=ts)
+        r = claim(world.c, world.vm, world.bob, vid, 1, (rec, rec, rec))
+        assert r["verdict"] == VERDICT_VERIFIED and r["verified_ts"] == ts
+        vid = vault(world)
+
+
+@pytest.mark.parametrize("late_by", [1, 5, 30, 120, 600])
+def test_deadline_exactly_at_the_minimum_is_rejected_when_the_block_is_late(world, late_by):
+    """The failure a 1-day vault hits: the client computes now + 1 day, the
+    transaction executes `late_by` seconds later, and the bound has moved."""
+    deadline = T0 + 86_400  # what a client clock at T0 produces for days=1
+    with revert(world, "ERR_INVALID_PARAMS"):
+        _create_at(world, T0, deadline, T0 + late_by)
+
+
+@pytest.mark.parametrize("late_by", [0, 1, 30, 120, 600, 1800, 3000, 3600])
+def test_deadline_with_a_one_hour_buffer_survives_latency_and_skew(world, late_by):
+    deadline = T0 + 86_400 + 3_600
+    assert _create_at(world, T0, deadline, T0 + late_by) == 1
+
+
+def test_the_buffer_is_a_bound_not_a_bypass(world):
+    deadline = T0 + 86_400 + 3_600
+    with revert(world, "ERR_INVALID_PARAMS"):
+        _create_at(world, T0, deadline, T0 + 3_601)
+
+
+def test_a_block_clock_behind_the_client_is_harmless(world):
+    """Client ahead of the chain only lengthens the vault slightly."""
+    assert _create_at(world, T0, T0 + 86_400 + 3_600, T0 - 500) == 1
+
+
+# ====================== JSON number spelling: what the contract accepts ======
+VECTOR_DIR = os.path.join("tests", "vectors")
+
+RECORD_TEMPLATE = (
+    '{"schema": "shiporslash/v1", "repo_url": "https://github.com/SOBEK96/ShipOrSlash", '
+    '"milestone_id": __MID__, "found": true, "release_tag": "v0.1.0-alpha.1", '
+    '"commit_sha": "' + COMMITS[1] + '", "signature_verified": true, '
+    '"signer_fingerprint_sha256": "' + SIGNER_HASH + '", "ci_status": "success", '
+    '"artifact": {"registry": "npm", "name": "' + NPM + '", "version": "0.1.0-alpha.1", '
+    '"published": true, "digest": "' + DIGEST_1 + '"}, "verified_ts": __TS__}'
+)
+
+MID_SPELLINGS = [
+    "1", "1.0", "1.00", "1e0", "1E0", "1e+0", "1E-0", "10e-1", "0.1e1", "1.0e0", "100e-2",
+    "01", "+1", "1.", ".1", "0x1", "true", '"1"', "null", "[1]", '{"v": 1}', "1.0000000000000001",
+    "100000000000000000000e-20", "1 ", "\n1\n", "١",
+]
+TS_SPELLINGS = [
+    "1760000001", "1760000001.0", "1.760000001e9", "1760000001e0", "17600000010e-1", "1760000001E+0",
+    "9007199254740993", "9007199254740992", "123456789012345678901234567890", "-5", "0", "-0",
+    "0.0", "1e400", "-1e400", "NaN", "Infinity", "-Infinity", "00", "1_000", "true", '"1760000001"',
+    "null", "1e2", "5e-1", "1760000001 ",
+]
+
+
+def _json_case(w, field, spelling):
+    body = RECORD_TEMPLATE.replace("__MID__", "1").replace("__TS__", "1760000001")
+    body = body.replace("__MID__", "1").replace("__TS__", "1760000001")
+    body = RECORD_TEMPLATE.replace("__MID__", spelling if field == "milestone_id" else "1")
+    body = body.replace("__TS__", spelling if field == "verified_ts" else "1760000001")
+    vid = create(w.c, w.vm, w.alice, w.bob)
+    raw = Raw(body)
+    r = claim(w.c, w.vm, w.bob, vid, 1, (raw, raw, raw))
+    return {"field": field, "spelling": spelling, "body": body,
+            "accepted": r["verdict"] == VERDICT_VERIFIED,
+            "verdict": r["verdict"], "source_count": r["source_count"]}
+
+
+def _json_vectors(w):
+    out = [_json_case(w, "milestone_id", s) for s in MID_SPELLINGS]
+    out += [_json_case(w, "verified_ts", s) for s in TS_SPELLINGS]
+    return out
+
+
+@pytest.mark.parametrize("spelling,accepted", [
+    ("1", True), ("1.0", False), ("1e0", False), ("1E0", False), ("10e-1", False),
+    ("1.0000000000000001", False), ("true", False), ('"1"', False), ("01", False),
+])
+def test_contract_requires_an_integer_literal_for_milestone_id(world, spelling, accepted):
+    got = _json_case(world, "milestone_id", spelling)
+    assert got["accepted"] is accepted, got
+
+
+@pytest.mark.parametrize("spelling,accepted", [
+    ("1760000001", True), ("1760000001.0", False), ("1.760000001e9", False),
+    ("9007199254740993", True), ("123456789012345678901234567890", True),
+    ("0", False), ("-5", False), ("NaN", False), ("Infinity", False), ("1e400", False),
+])
+def test_contract_requires_a_positive_integer_literal_for_verified_ts(world, spelling, accepted):
+    got = _json_case(world, "verified_ts", spelling)
+    assert got["accepted"] is accepted, got
+
+
+def test_json_number_vectors_file_is_current(world):
+    """Replayed by the frontend suite. Regenerate with SHIPORSLASH_REGEN_VECTORS=1."""
+    path = os.path.join(VECTOR_DIR, "json_number_parity.json")
+    doc = {"generated_by": "tests/test_ship_or_slash.py::test_json_number_vectors_file_is_current",
+           "rule": "accepted == the contract returned VERIFIED for three mirrors serving this body",
+           "cases": _json_vectors(world)}
+    if os.environ.get("SHIPORSLASH_REGEN_VECTORS") == "1":
+        with open(path, "w") as f:
+            json.dump(doc, f, indent=1, sort_keys=True)
+            f.write("\n")
+    with open(path) as f:
+        assert json.load(f) == json.loads(json.dumps(doc, sort_keys=True))
+
+
+# ====================== quorum scenarios: what the contract decides ========
+def _ident(m, **over):
+    return record(m, **over)
+
+
+def _scenarios():
+    """(name, tranche, three bodies). Tranche 2 scenarios run after tranche 1
+    was accepted with the default identity, so reuse rules are in force."""
+    a1 = art_with(1, digest="sha256:" + "a" * 64)
+    b1 = art_with(1, digest="sha256:" + "b" * 64)
+    docker = art_with(1, registry="docker", name=DOCKER)
+    r2 = record(2)
+    return [
+        ("all_agree", 1, [record(1), record(1), record(1)]),
+        ("two_agree_one_outage", 1, [record(1), record(1), "503"]),
+        ("digest_conflict_with_404", 1, [record(1, artifact=a1), record(1, artifact=b1), "404"]),
+        ("digest_conflict_with_outage", 1, [record(1, artifact=a1), record(1, artifact=b1), "503"]),
+        ("digest_conflict_third_breaks_tie", 1, [record(1, artifact=a1), record(1, artifact=b1), record(1, artifact=a1)]),
+        ("commit_conflict_with_404", 1, [record(1), record(1, commit_sha="c" * 40), "404"]),
+        ("commit_conflict_with_outage", 1, [record(1), record(1, commit_sha="c" * 40), "503"]),
+        ("commit_third_breaks_tie", 1, [record(1), record(1, commit_sha="c" * 40), record(1, commit_sha="c" * 40)]),
+        ("registry_mismatch_with_outage", 1, [record(1), record(1, artifact=docker), "503"]),
+        ("registry_mismatch_with_404", 1, [record(1), record(1, artifact=docker), "404"]),
+        ("registry_majority", 1, [record(1), record(1, artifact=docker), record(1)]),
+        ("missing_signer_two_of_three", 1, [record(1, signer_fingerprint_sha256=None), record(1, signer_fingerprint_sha256=None), record(1)]),
+        ("missing_signer_one_of_three", 1, [record(1, signer_fingerprint_sha256=None), record(1), record(1)]),
+        ("wrong_signer_two_of_three", 1, [record(1, signer_fingerprint_sha256=OTHER_SIGNER_HASH), record(1, signer_fingerprint_sha256=OTHER_SIGNER_HASH), record(1)]),
+        ("unsigned_two_of_three", 1, [record(1, signature_verified=False), record(1, signature_verified=False), record(1)]),
+        ("tag_conflict_with_404", 1, [record(1), conflict(1), "404"]),
+        ("t2_clean", 2, [r2, r2, r2]),
+        ("t2_reuses_commit_all", 2, [record(2, commit_sha=COMMITS[1])] * 3),
+        ("t2_reuses_commit_two_of_three", 2, [record(2, commit_sha=COMMITS[1]), record(2, commit_sha=COMMITS[1]), r2]),
+        ("t2_reuses_commit_one_of_three", 2, [record(2, commit_sha=COMMITS[1]), r2, r2]),
+        ("t2_reuses_digest_all", 2, [record(2, artifact=art_with(2, digest=DIGEST_1))] * 3),
+        ("t2_reuses_digest_two_of_three", 2, [record(2, artifact=art_with(2, digest=DIGEST_1)), record(2, artifact=art_with(2, digest=DIGEST_1)), r2]),
+        ("t2_reuse_with_outage", 2, [record(2, commit_sha=COMMITS[1]), r2, "503"]),
+    ]
+
+
+def _quorum_vectors(w):
+    out = []
+    for name, tranche, bodies in _scenarios():
+        vid = create(w.c, w.vm, w.alice, w.bob)
+        if tranche == 2:
+            assert claim(w.c, w.vm, w.bob, vid, 1)["accepted"] is True
+        states = tuple(Raw(json.dumps(b)) if isinstance(b, dict) else b for b in bodies)
+        r = claim(w.c, w.vm, w.bob, vid, tranche, states)
+        mirror_bodies = [b if isinstance(b, str) and not isinstance(b, Raw) else str(Raw(json.dumps(b))) if isinstance(b, dict) else b for b in bodies]
+        out.append({
+            "name": name,
+            "tranche": tranche,
+            "bodies": [json.dumps(b) if isinstance(b, dict) else b for b in bodies],
+            "context": {
+                "repo": REPO_NORM, "signer": SIGNER_HASH, "prefix": "v", "npm": NPM, "docker": DOCKER,
+                "previous_tag": TAGS[1] if tranche == 2 else "",
+                "used_commits": [COMMITS[1]] if tranche == 2 else [],
+                "used_digests": [DIGEST_1] if tranche == 2 else [],
+            },
+            "verdict": r["verdict"],
+            "source_count": r["source_count"],
+            "release_tag": r["release_tag"],
+            "commit_sha": r["commit_sha"],
+            "artifact_digest": r["artifact_digest"],
+        })
+    return out
+
+
+def test_quorum_scenarios_decide_as_documented(world):
+    got = {v["name"]: v for v in _quorum_vectors(world)}
+    want = {  # the contract's verdicts, written down independently of any vector file
+        "all_agree": 1, "two_agree_one_outage": 1,
+        "digest_conflict_with_404": 0, "digest_conflict_with_outage": 2, "digest_conflict_third_breaks_tie": 1,
+        "commit_conflict_with_404": 0, "commit_conflict_with_outage": 2, "commit_third_breaks_tie": 1,
+        "registry_mismatch_with_outage": 2, "registry_mismatch_with_404": 0, "registry_majority": 1,
+        "missing_signer_two_of_three": 0, "missing_signer_one_of_three": 1,
+        "wrong_signer_two_of_three": 0, "unsigned_two_of_three": 0, "tag_conflict_with_404": 0,
+        "t2_clean": 1, "t2_reuses_commit_all": 0, "t2_reuses_commit_two_of_three": 0,
+        "t2_reuses_commit_one_of_three": 1, "t2_reuses_digest_all": 0,
+        "t2_reuses_digest_two_of_three": 0, "t2_reuse_with_outage": 2,
+    }
+    assert {k: v["verdict"] for k, v in got.items()} == want
+
+
+def test_quorum_vectors_file_is_current(world):
+    path = os.path.join(VECTOR_DIR, "quorum_parity.json")
+    doc = {"generated_by": "tests/test_ship_or_slash.py::test_quorum_vectors_file_is_current",
+           "scenarios": _quorum_vectors(world)}
+    if os.environ.get("SHIPORSLASH_REGEN_VECTORS") == "1":
+        with open(path, "w") as f:
+            json.dump(doc, f, indent=1, sort_keys=True)
+            f.write("\n")
+    with open(path) as f:
+        assert json.load(f) == json.loads(json.dumps(doc, sort_keys=True))

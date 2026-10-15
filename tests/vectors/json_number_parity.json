@@ -1,0 +1,422 @@
+{
+ "cases": [
+  {
+   "accepted": true,
+   "body": "{\"schema\": \"shiporslash/v1\", \"repo_url\": \"https://github.com/SOBEK96/ShipOrSlash\", \"milestone_id\": 1, \"found\": true, \"release_tag\": \"v0.1.0-alpha.1\", \"commit_sha\": \"1111111111111111111111111111111111111111\", \"signature_verified\": true, \"signer_fingerprint_sha256\": \"d8a87fdcd4224662af9b788cae845191b3bc64b8155eb124fdbe0d506e4fcf10\", \"ci_status\": \"success\", \"artifact\": {\"registry\": \"npm\", \"name\": \"@sobek96/shiporslash\", \"version\": \"0.1.0-alpha.1\", \"published\": true, \"digest\": \"sha256:147cacc6e07e45c60a4300a33f24ae75a7ffee98eb956d8de14aea487c803d39\"}, \"verified_ts\": 1760000001}",
+   "field": "milestone_id",
+   "source_count": 3,
+   "spelling": "1",
+   "verdict": 1
+  },
+  {
+   "accepted": false,
+   "body": "{\"schema\": \"shiporslash/v1\", \"repo_url\": \"https://github.com/SOBEK96/ShipOrSlash\", \"milestone_id\": 1.0, \"found\": true, \"release_tag\": \"v0.1.0-alpha.1\", \"commit_sha\": \"1111111111111111111111111111111111111111\", \"signature_verified\": true, \"signer_fingerprint_sha256\": \"d8a87fdcd4224662af9b788cae845191b3bc64b8155eb124fdbe0d506e4fcf10\", \"ci_status\": \"success\", \"artifact\": {\"registry\": \"npm\", \"name\": \"@sobek96/shiporslash\", \"version\": \"0.1.0-alpha.1\", \"published\": true, \"digest\": \"sha256:147cacc6e07e45c60a4300a33f24ae75a7ffee98eb956d8de14aea487c803d39\"}, \"verified_ts\": 1760000001}",
+   "field": "milestone_id",
+   "source_count": 3,
+   "spelling": "1.0",
+   "verdict": 0
+  },
+  {
+   "accepted": false,
+   "body": "{\"schema\": \"shiporslash/v1\", \"repo_url\": \"https://github.com/SOBEK96/ShipOrSlash\", \"milestone_id\": 1.00, \"found\": true, \"release_tag\": \"v0.1.0-alpha.1\", \"commit_sha\": \"1111111111111111111111111111111111111111\", \"signature_verified\": true, \"signer_fingerprint_sha256\": \"d8a87fdcd4224662af9b788cae845191b3bc64b8155eb124fdbe0d506e4fcf10\", \"ci_status\": \"success\", \"artifact\": {\"registry\": \"npm\", \"name\": \"@sobek96/shiporslash\", \"version\": \"0.1.0-alpha.1\", \"published\": true, \"digest\": \"sha256:147cacc6e07e45c60a4300a33f24ae75a7ffee98eb956d8de14aea487c803d39\"}, \"verified_ts\": 1760000001}",
+   "field": "milestone_id",
+   "source_count": 3,
+   "spelling": "1.00",
+   "verdict": 0
+  },
+  {
+   "accepted": false,
+   "body": "{\"schema\": \"shiporslash/v1\", \"repo_url\": \"https://github.com/SOBEK96/ShipOrSlash\", \"milestone_id\": 1e0, \"found\": true, \"release_tag\": \"v0.1.0-alpha.1\", \"commit_sha\": \"1111111111111111111111111111111111111111\", \"signature_verified\": true, \"signer_fingerprint_sha256\": \"d8a87fdcd4224662af9b788cae845191b3bc64b8155eb124fdbe0d506e4fcf10\", \"ci_status\": \"success\", \"artifact\": {\"registry\": \"npm\", \"name\": \"@sobek96/shiporslash\", \"version\": \"0.1.0-alpha.1\", \"published\": true, \"digest\": \"sha256:147cacc6e07e45c60a4300a33f24ae75a7ffee98eb956d8de14aea487c803d39\"}, \"verified_ts\": 1760000001}",
+   "field": "milestone_id",
+   "source_count": 3,
+   "spelling": "1e0",
+   "verdict": 0
+  },
+  {
+   "accepted": false,
+   "body": "{\"schema\": \"shiporslash/v1\", \"repo_url\": \"https://github.com/SOBEK96/ShipOrSlash\", \"milestone_id\": 1E0, \"found\": true, \"release_tag\": \"v0.1.0-alpha.1\", \"commit_sha\": \"1111111111111111111111111111111111111111\", \"signature_verified\": true, \"signer_fingerprint_sha256\": \"d8a87fdcd4224662af9b788cae845191b3bc64b8155eb124fdbe0d506e4fcf10\", \"ci_status\": \"success\", \"artifact\": {\"registry\": \"npm\", \"name\": \"@sobek96/shiporslash\", \"version\": \"0.1.0-alpha.1\", \"published\": true, \"digest\": \"sha256:147cacc6e07e45c60a4300a33f24ae75a7ffee98eb956d8de14aea487c803d39\"}, \"verified_ts\": 1760000001}",
+   "field": "milestone_id",
+   "source_count": 3,
+   "spelling": "1E0",
+   "verdict": 0
+  },
+  {
+   "accepted": false,
+   "body": "{\"schema\": \"shiporslash/v1\", \"repo_url\": \"https://github.com/SOBEK96/ShipOrSlash\", \"milestone_id\": 1e+0, \"found\": true, \"release_tag\": \"v0.1.0-alpha.1\", \"commit_sha\": \"1111111111111111111111111111111111111111\", \"signature_verified\": true, \"signer_fingerprint_sha256\": \"d8a87fdcd4224662af9b788cae845191b3bc64b8155eb124fdbe0d506e4fcf10\", \"ci_status\": \"success\", \"artifact\": {\"registry\": \"npm\", \"name\": \"@sobek96/shiporslash\", \"version\": \"0.1.0-alpha.1\", \"published\": true, \"digest\": \"sha256:147cacc6e07e45c60a4300a33f24ae75a7ffee98eb956d8de14aea487c803d39\"}, \"verified_ts\": 1760000001}",
+   "field": "milestone_id",
+   "source_count": 3,
+   "spelling": "1e+0",
+   "verdict": 0
+  },
+  {
+   "accepted": false,
+   "body": "{\"schema\": \"shiporslash/v1\", \"repo_url\": \"https://github.com/SOBEK96/ShipOrSlash\", \"milestone_id\": 1E-0, \"found\": true, \"release_tag\": \"v0.1.0-alpha.1\", \"commit_sha\": \"1111111111111111111111111111111111111111\", \"signature_verified\": true, \"signer_fingerprint_sha256\": \"d8a87fdcd4224662af9b788cae845191b3bc64b8155eb124fdbe0d506e4fcf10\", \"ci_status\": \"success\", \"artifact\": {\"registry\": \"npm\", \"name\": \"@sobek96/shiporslash\", \"version\": \"0.1.0-alpha.1\", \"published\": true, \"digest\": \"sha256:147cacc6e07e45c60a4300a33f24ae75a7ffee98eb956d8de14aea487c803d39\"}, \"verified_ts\": 1760000001}",
+   "field": "milestone_id",
+   "source_count": 3,
+   "spelling": "1E-0",
+   "verdict": 0
+  },
+  {
+   "accepted": false,
+   "body": "{\"schema\": \"shiporslash/v1\", \"repo_url\": \"https://github.com/SOBEK96/ShipOrSlash\", \"milestone_id\": 10e-1, \"found\": true, \"release_tag\": \"v0.1.0-alpha.1\", \"commit_sha\": \"1111111111111111111111111111111111111111\", \"signature_verified\": true, \"signer_fingerprint_sha256\": \"d8a87fdcd4224662af9b788cae845191b3bc64b8155eb124fdbe0d506e4fcf10\", \"ci_status\": \"success\", \"artifact\": {\"registry\": \"npm\", \"name\": \"@sobek96/shiporslash\", \"version\": \"0.1.0-alpha.1\", \"published\": true, \"digest\": \"sha256:147cacc6e07e45c60a4300a33f24ae75a7ffee98eb956d8de14aea487c803d39\"}, \"verified_ts\": 1760000001}",
+   "field": "milestone_id",
+   "source_count": 3,
+   "spelling": "10e-1",
+   "verdict": 0
+  },
+  {
+   "accepted": false,
+   "body": "{\"schema\": \"shiporslash/v1\", \"repo_url\": \"https://github.com/SOBEK96/ShipOrSlash\", \"milestone_id\": 0.1e1, \"found\": true, \"release_tag\": \"v0.1.0-alpha.1\", \"commit_sha\": \"1111111111111111111111111111111111111111\", \"signature_verified\": true, \"signer_fingerprint_sha256\": \"d8a87fdcd4224662af9b788cae845191b3bc64b8155eb124fdbe0d506e4fcf10\", \"ci_status\": \"success\", \"artifact\": {\"registry\": \"npm\", \"name\": \"@sobek96/shiporslash\", \"version\": \"0.1.0-alpha.1\", \"published\": true, \"digest\": \"sha256:147cacc6e07e45c60a4300a33f24ae75a7ffee98eb956d8de14aea487c803d39\"}, \"verified_ts\": 1760000001}",
+   "field": "milestone_id",
+   "source_count": 3,
+   "spelling": "0.1e1",
+   "verdict": 0
+  },
+  {
+   "accepted": false,
+   "body": "{\"schema\": \"shiporslash/v1\", \"repo_url\": \"https://github.com/SOBEK96/ShipOrSlash\", \"milestone_id\": 1.0e0, \"found\": true, \"release_tag\": \"v0.1.0-alpha.1\", \"commit_sha\": \"1111111111111111111111111111111111111111\", \"signature_verified\": true, \"signer_fingerprint_sha256\": \"d8a87fdcd4224662af9b788cae845191b3bc64b8155eb124fdbe0d506e4fcf10\", \"ci_status\": \"success\", \"artifact\": {\"registry\": \"npm\", \"name\": \"@sobek96/shiporslash\", \"version\": \"0.1.0-alpha.1\", \"published\": true, \"digest\": \"sha256:147cacc6e07e45c60a4300a33f24ae75a7ffee98eb956d8de14aea487c803d39\"}, \"verified_ts\": 1760000001}",
+   "field": "milestone_id",
+   "source_count": 3,
+   "spelling": "1.0e0",
+   "verdict": 0
+  },
+  {
+   "accepted": false,
+   "body": "{\"schema\": \"shiporslash/v1\", \"repo_url\": \"https://github.com/SOBEK96/ShipOrSlash\", \"milestone_id\": 100e-2, \"found\": true, \"release_tag\": \"v0.1.0-alpha.1\", \"commit_sha\": \"1111111111111111111111111111111111111111\", \"signature_verified\": true, \"signer_fingerprint_sha256\": \"d8a87fdcd4224662af9b788cae845191b3bc64b8155eb124fdbe0d506e4fcf10\", \"ci_status\": \"success\", \"artifact\": {\"registry\": \"npm\", \"name\": \"@sobek96/shiporslash\", \"version\": \"0.1.0-alpha.1\", \"published\": true, \"digest\": \"sha256:147cacc6e07e45c60a4300a33f24ae75a7ffee98eb956d8de14aea487c803d39\"}, \"verified_ts\": 1760000001}",
+   "field": "milestone_id",
+   "source_count": 3,
+   "spelling": "100e-2",
+   "verdict": 0
+  },
+  {
+   "accepted": false,
+   "body": "{\"schema\": \"shiporslash/v1\", \"repo_url\": \"https://github.com/SOBEK96/ShipOrSlash\", \"milestone_id\": 01, \"found\": true, \"release_tag\": \"v0.1.0-alpha.1\", \"commit_sha\": \"1111111111111111111111111111111111111111\", \"signature_verified\": true, \"signer_fingerprint_sha256\": \"d8a87fdcd4224662af9b788cae845191b3bc64b8155eb124fdbe0d506e4fcf10\", \"ci_status\": \"success\", \"artifact\": {\"registry\": \"npm\", \"name\": \"@sobek96/shiporslash\", \"version\": \"0.1.0-alpha.1\", \"published\": true, \"digest\": \"sha256:147cacc6e07e45c60a4300a33f24ae75a7ffee98eb956d8de14aea487c803d39\"}, \"verified_ts\": 1760000001}",
+   "field": "milestone_id",
+   "source_count": 0,
+   "spelling": "01",
+   "verdict": 2
+  },
+  {
+   "accepted": false,
+   "body": "{\"schema\": \"shiporslash/v1\", \"repo_url\": \"https://github.com/SOBEK96/ShipOrSlash\", \"milestone_id\": +1, \"found\": true, \"release_tag\": \"v0.1.0-alpha.1\", \"commit_sha\": \"1111111111111111111111111111111111111111\", \"signature_verified\": true, \"signer_fingerprint_sha256\": \"d8a87fdcd4224662af9b788cae845191b3bc64b8155eb124fdbe0d506e4fcf10\", \"ci_status\": \"success\", \"artifact\": {\"registry\": \"npm\", \"name\": \"@sobek96/shiporslash\", \"version\": \"0.1.0-alpha.1\", \"published\": true, \"digest\": \"sha256:147cacc6e07e45c60a4300a33f24ae75a7ffee98eb956d8de14aea487c803d39\"}, \"verified_ts\": 1760000001}",
+   "field": "milestone_id",
+   "source_count": 0,
+   "spelling": "+1",
+   "verdict": 2
+  },
+  {
+   "accepted": false,
+   "body": "{\"schema\": \"shiporslash/v1\", \"repo_url\": \"https://github.com/SOBEK96/ShipOrSlash\", \"milestone_id\": 1., \"found\": true, \"release_tag\": \"v0.1.0-alpha.1\", \"commit_sha\": \"1111111111111111111111111111111111111111\", \"signature_verified\": true, \"signer_fingerprint_sha256\": \"d8a87fdcd4224662af9b788cae845191b3bc64b8155eb124fdbe0d506e4fcf10\", \"ci_status\": \"success\", \"artifact\": {\"registry\": \"npm\", \"name\": \"@sobek96/shiporslash\", \"version\": \"0.1.0-alpha.1\", \"published\": true, \"digest\": \"sha256:147cacc6e07e45c60a4300a33f24ae75a7ffee98eb956d8de14aea487c803d39\"}, \"verified_ts\": 1760000001}",
+   "field": "milestone_id",
+   "source_count": 0,
+   "spelling": "1.",
+   "verdict": 2
+  },
+  {
+   "accepted": false,
+   "body": "{\"schema\": \"shiporslash/v1\", \"repo_url\": \"https://github.com/SOBEK96/ShipOrSlash\", \"milestone_id\": .1, \"found\": true, \"release_tag\": \"v0.1.0-alpha.1\", \"commit_sha\": \"1111111111111111111111111111111111111111\", \"signature_verified\": true, \"signer_fingerprint_sha256\": \"d8a87fdcd4224662af9b788cae845191b3bc64b8155eb124fdbe0d506e4fcf10\", \"ci_status\": \"success\", \"artifact\": {\"registry\": \"npm\", \"name\": \"@sobek96/shiporslash\", \"version\": \"0.1.0-alpha.1\", \"published\": true, \"digest\": \"sha256:147cacc6e07e45c60a4300a33f24ae75a7ffee98eb956d8de14aea487c803d39\"}, \"verified_ts\": 1760000001}",
+   "field": "milestone_id",
+   "source_count": 0,
+   "spelling": ".1",
+   "verdict": 2
+  },
+  {
+   "accepted": false,
+   "body": "{\"schema\": \"shiporslash/v1\", \"repo_url\": \"https://github.com/SOBEK96/ShipOrSlash\", \"milestone_id\": 0x1, \"found\": true, \"release_tag\": \"v0.1.0-alpha.1\", \"commit_sha\": \"1111111111111111111111111111111111111111\", \"signature_verified\": true, \"signer_fingerprint_sha256\": \"d8a87fdcd4224662af9b788cae845191b3bc64b8155eb124fdbe0d506e4fcf10\", \"ci_status\": \"success\", \"artifact\": {\"registry\": \"npm\", \"name\": \"@sobek96/shiporslash\", \"version\": \"0.1.0-alpha.1\", \"published\": true, \"digest\": \"sha256:147cacc6e07e45c60a4300a33f24ae75a7ffee98eb956d8de14aea487c803d39\"}, \"verified_ts\": 1760000001}",
+   "field": "milestone_id",
+   "source_count": 0,
+   "spelling": "0x1",
+   "verdict": 2
+  },
+  {
+   "accepted": false,
+   "body": "{\"schema\": \"shiporslash/v1\", \"repo_url\": \"https://github.com/SOBEK96/ShipOrSlash\", \"milestone_id\": true, \"found\": true, \"release_tag\": \"v0.1.0-alpha.1\", \"commit_sha\": \"1111111111111111111111111111111111111111\", \"signature_verified\": true, \"signer_fingerprint_sha256\": \"d8a87fdcd4224662af9b788cae845191b3bc64b8155eb124fdbe0d506e4fcf10\", \"ci_status\": \"success\", \"artifact\": {\"registry\": \"npm\", \"name\": \"@sobek96/shiporslash\", \"version\": \"0.1.0-alpha.1\", \"published\": true, \"digest\": \"sha256:147cacc6e07e45c60a4300a33f24ae75a7ffee98eb956d8de14aea487c803d39\"}, \"verified_ts\": 1760000001}",
+   "field": "milestone_id",
+   "source_count": 3,
+   "spelling": "true",
+   "verdict": 0
+  },
+  {
+   "accepted": false,
+   "body": "{\"schema\": \"shiporslash/v1\", \"repo_url\": \"https://github.com/SOBEK96/ShipOrSlash\", \"milestone_id\": \"1\", \"found\": true, \"release_tag\": \"v0.1.0-alpha.1\", \"commit_sha\": \"1111111111111111111111111111111111111111\", \"signature_verified\": true, \"signer_fingerprint_sha256\": \"d8a87fdcd4224662af9b788cae845191b3bc64b8155eb124fdbe0d506e4fcf10\", \"ci_status\": \"success\", \"artifact\": {\"registry\": \"npm\", \"name\": \"@sobek96/shiporslash\", \"version\": \"0.1.0-alpha.1\", \"published\": true, \"digest\": \"sha256:147cacc6e07e45c60a4300a33f24ae75a7ffee98eb956d8de14aea487c803d39\"}, \"verified_ts\": 1760000001}",
+   "field": "milestone_id",
+   "source_count": 3,
+   "spelling": "\"1\"",
+   "verdict": 0
+  },
+  {
+   "accepted": false,
+   "body": "{\"schema\": \"shiporslash/v1\", \"repo_url\": \"https://github.com/SOBEK96/ShipOrSlash\", \"milestone_id\": null, \"found\": true, \"release_tag\": \"v0.1.0-alpha.1\", \"commit_sha\": \"1111111111111111111111111111111111111111\", \"signature_verified\": true, \"signer_fingerprint_sha256\": \"d8a87fdcd4224662af9b788cae845191b3bc64b8155eb124fdbe0d506e4fcf10\", \"ci_status\": \"success\", \"artifact\": {\"registry\": \"npm\", \"name\": \"@sobek96/shiporslash\", \"version\": \"0.1.0-alpha.1\", \"published\": true, \"digest\": \"sha256:147cacc6e07e45c60a4300a33f24ae75a7ffee98eb956d8de14aea487c803d39\"}, \"verified_ts\": 1760000001}",
+   "field": "milestone_id",
+   "source_count": 3,
+   "spelling": "null",
+   "verdict": 0
+  },
+  {
+   "accepted": false,
+   "body": "{\"schema\": \"shiporslash/v1\", \"repo_url\": \"https://github.com/SOBEK96/ShipOrSlash\", \"milestone_id\": [1], \"found\": true, \"release_tag\": \"v0.1.0-alpha.1\", \"commit_sha\": \"1111111111111111111111111111111111111111\", \"signature_verified\": true, \"signer_fingerprint_sha256\": \"d8a87fdcd4224662af9b788cae845191b3bc64b8155eb124fdbe0d506e4fcf10\", \"ci_status\": \"success\", \"artifact\": {\"registry\": \"npm\", \"name\": \"@sobek96/shiporslash\", \"version\": \"0.1.0-alpha.1\", \"published\": true, \"digest\": \"sha256:147cacc6e07e45c60a4300a33f24ae75a7ffee98eb956d8de14aea487c803d39\"}, \"verified_ts\": 1760000001}",
+   "field": "milestone_id",
+   "source_count": 3,
+   "spelling": "[1]",
+   "verdict": 0
+  },
+  {
+   "accepted": false,
+   "body": "{\"schema\": \"shiporslash/v1\", \"repo_url\": \"https://github.com/SOBEK96/ShipOrSlash\", \"milestone_id\": {\"v\": 1}, \"found\": true, \"release_tag\": \"v0.1.0-alpha.1\", \"commit_sha\": \"1111111111111111111111111111111111111111\", \"signature_verified\": true, \"signer_fingerprint_sha256\": \"d8a87fdcd4224662af9b788cae845191b3bc64b8155eb124fdbe0d506e4fcf10\", \"ci_status\": \"success\", \"artifact\": {\"registry\": \"npm\", \"name\": \"@sobek96/shiporslash\", \"version\": \"0.1.0-alpha.1\", \"published\": true, \"digest\": \"sha256:147cacc6e07e45c60a4300a33f24ae75a7ffee98eb956d8de14aea487c803d39\"}, \"verified_ts\": 1760000001}",
+   "field": "milestone_id",
+   "source_count": 3,
+   "spelling": "{\"v\": 1}",
+   "verdict": 0
+  },
+  {
+   "accepted": false,
+   "body": "{\"schema\": \"shiporslash/v1\", \"repo_url\": \"https://github.com/SOBEK96/ShipOrSlash\", \"milestone_id\": 1.0000000000000001, \"found\": true, \"release_tag\": \"v0.1.0-alpha.1\", \"commit_sha\": \"1111111111111111111111111111111111111111\", \"signature_verified\": true, \"signer_fingerprint_sha256\": \"d8a87fdcd4224662af9b788cae845191b3bc64b8155eb124fdbe0d506e4fcf10\", \"ci_status\": \"success\", \"artifact\": {\"registry\": \"npm\", \"name\": \"@sobek96/shiporslash\", \"version\": \"0.1.0-alpha.1\", \"published\": true, \"digest\": \"sha256:147cacc6e07e45c60a4300a33f24ae75a7ffee98eb956d8de14aea487c803d39\"}, \"verified_ts\": 1760000001}",
+   "field": "milestone_id",
+   "source_count": 3,
+   "spelling": "1.0000000000000001",
+   "verdict": 0
+  },
+  {
+   "accepted": false,
+   "body": "{\"schema\": \"shiporslash/v1\", \"repo_url\": \"https://github.com/SOBEK96/ShipOrSlash\", \"milestone_id\": 100000000000000000000e-20, \"found\": true, \"release_tag\": \"v0.1.0-alpha.1\", \"commit_sha\": \"1111111111111111111111111111111111111111\", \"signature_verified\": true, \"signer_fingerprint_sha256\": \"d8a87fdcd4224662af9b788cae845191b3bc64b8155eb124fdbe0d506e4fcf10\", \"ci_status\": \"success\", \"artifact\": {\"registry\": \"npm\", \"name\": \"@sobek96/shiporslash\", \"version\": \"0.1.0-alpha.1\", \"published\": true, \"digest\": \"sha256:147cacc6e07e45c60a4300a33f24ae75a7ffee98eb956d8de14aea487c803d39\"}, \"verified_ts\": 1760000001}",
+   "field": "milestone_id",
+   "source_count": 3,
+   "spelling": "100000000000000000000e-20",
+   "verdict": 0
+  },
+  {
+   "accepted": true,
+   "body": "{\"schema\": \"shiporslash/v1\", \"repo_url\": \"https://github.com/SOBEK96/ShipOrSlash\", \"milestone_id\": 1 , \"found\": true, \"release_tag\": \"v0.1.0-alpha.1\", \"commit_sha\": \"1111111111111111111111111111111111111111\", \"signature_verified\": true, \"signer_fingerprint_sha256\": \"d8a87fdcd4224662af9b788cae845191b3bc64b8155eb124fdbe0d506e4fcf10\", \"ci_status\": \"success\", \"artifact\": {\"registry\": \"npm\", \"name\": \"@sobek96/shiporslash\", \"version\": \"0.1.0-alpha.1\", \"published\": true, \"digest\": \"sha256:147cacc6e07e45c60a4300a33f24ae75a7ffee98eb956d8de14aea487c803d39\"}, \"verified_ts\": 1760000001}",
+   "field": "milestone_id",
+   "source_count": 3,
+   "spelling": "1 ",
+   "verdict": 1
+  },
+  {
+   "accepted": true,
+   "body": "{\"schema\": \"shiporslash/v1\", \"repo_url\": \"https://github.com/SOBEK96/ShipOrSlash\", \"milestone_id\": \n1\n, \"found\": true, \"release_tag\": \"v0.1.0-alpha.1\", \"commit_sha\": \"1111111111111111111111111111111111111111\", \"signature_verified\": true, \"signer_fingerprint_sha256\": \"d8a87fdcd4224662af9b788cae845191b3bc64b8155eb124fdbe0d506e4fcf10\", \"ci_status\": \"success\", \"artifact\": {\"registry\": \"npm\", \"name\": \"@sobek96/shiporslash\", \"version\": \"0.1.0-alpha.1\", \"published\": true, \"digest\": \"sha256:147cacc6e07e45c60a4300a33f24ae75a7ffee98eb956d8de14aea487c803d39\"}, \"verified_ts\": 1760000001}",
+   "field": "milestone_id",
+   "source_count": 3,
+   "spelling": "\n1\n",
+   "verdict": 1
+  },
+  {
+   "accepted": false,
+   "body": "{\"schema\": \"shiporslash/v1\", \"repo_url\": \"https://github.com/SOBEK96/ShipOrSlash\", \"milestone_id\": \u0661, \"found\": true, \"release_tag\": \"v0.1.0-alpha.1\", \"commit_sha\": \"1111111111111111111111111111111111111111\", \"signature_verified\": true, \"signer_fingerprint_sha256\": \"d8a87fdcd4224662af9b788cae845191b3bc64b8155eb124fdbe0d506e4fcf10\", \"ci_status\": \"success\", \"artifact\": {\"registry\": \"npm\", \"name\": \"@sobek96/shiporslash\", \"version\": \"0.1.0-alpha.1\", \"published\": true, \"digest\": \"sha256:147cacc6e07e45c60a4300a33f24ae75a7ffee98eb956d8de14aea487c803d39\"}, \"verified_ts\": 1760000001}",
+   "field": "milestone_id",
+   "source_count": 0,
+   "spelling": "\u0661",
+   "verdict": 2
+  },
+  {
+   "accepted": true,
+   "body": "{\"schema\": \"shiporslash/v1\", \"repo_url\": \"https://github.com/SOBEK96/ShipOrSlash\", \"milestone_id\": 1, \"found\": true, \"release_tag\": \"v0.1.0-alpha.1\", \"commit_sha\": \"1111111111111111111111111111111111111111\", \"signature_verified\": true, \"signer_fingerprint_sha256\": \"d8a87fdcd4224662af9b788cae845191b3bc64b8155eb124fdbe0d506e4fcf10\", \"ci_status\": \"success\", \"artifact\": {\"registry\": \"npm\", \"name\": \"@sobek96/shiporslash\", \"version\": \"0.1.0-alpha.1\", \"published\": true, \"digest\": \"sha256:147cacc6e07e45c60a4300a33f24ae75a7ffee98eb956d8de14aea487c803d39\"}, \"verified_ts\": 1760000001}",
+   "field": "verified_ts",
+   "source_count": 3,
+   "spelling": "1760000001",
+   "verdict": 1
+  },
+  {
+   "accepted": false,
+   "body": "{\"schema\": \"shiporslash/v1\", \"repo_url\": \"https://github.com/SOBEK96/ShipOrSlash\", \"milestone_id\": 1, \"found\": true, \"release_tag\": \"v0.1.0-alpha.1\", \"commit_sha\": \"1111111111111111111111111111111111111111\", \"signature_verified\": true, \"signer_fingerprint_sha256\": \"d8a87fdcd4224662af9b788cae845191b3bc64b8155eb124fdbe0d506e4fcf10\", \"ci_status\": \"success\", \"artifact\": {\"registry\": \"npm\", \"name\": \"@sobek96/shiporslash\", \"version\": \"0.1.0-alpha.1\", \"published\": true, \"digest\": \"sha256:147cacc6e07e45c60a4300a33f24ae75a7ffee98eb956d8de14aea487c803d39\"}, \"verified_ts\": 1760000001.0}",
+   "field": "verified_ts",
+   "source_count": 3,
+   "spelling": "1760000001.0",
+   "verdict": 0
+  },
+  {
+   "accepted": false,
+   "body": "{\"schema\": \"shiporslash/v1\", \"repo_url\": \"https://github.com/SOBEK96/ShipOrSlash\", \"milestone_id\": 1, \"found\": true, \"release_tag\": \"v0.1.0-alpha.1\", \"commit_sha\": \"1111111111111111111111111111111111111111\", \"signature_verified\": true, \"signer_fingerprint_sha256\": \"d8a87fdcd4224662af9b788cae845191b3bc64b8155eb124fdbe0d506e4fcf10\", \"ci_status\": \"success\", \"artifact\": {\"registry\": \"npm\", \"name\": \"@sobek96/shiporslash\", \"version\": \"0.1.0-alpha.1\", \"published\": true, \"digest\": \"sha256:147cacc6e07e45c60a4300a33f24ae75a7ffee98eb956d8de14aea487c803d39\"}, \"verified_ts\": 1.760000001e9}",
+   "field": "verified_ts",
+   "source_count": 3,
+   "spelling": "1.760000001e9",
+   "verdict": 0
+  },
+  {
+   "accepted": false,
+   "body": "{\"schema\": \"shiporslash/v1\", \"repo_url\": \"https://github.com/SOBEK96/ShipOrSlash\", \"milestone_id\": 1, \"found\": true, \"release_tag\": \"v0.1.0-alpha.1\", \"commit_sha\": \"1111111111111111111111111111111111111111\", \"signature_verified\": true, \"signer_fingerprint_sha256\": \"d8a87fdcd4224662af9b788cae845191b3bc64b8155eb124fdbe0d506e4fcf10\", \"ci_status\": \"success\", \"artifact\": {\"registry\": \"npm\", \"name\": \"@sobek96/shiporslash\", \"version\": \"0.1.0-alpha.1\", \"published\": true, \"digest\": \"sha256:147cacc6e07e45c60a4300a33f24ae75a7ffee98eb956d8de14aea487c803d39\"}, \"verified_ts\": 1760000001e0}",
+   "field": "verified_ts",
+   "source_count": 3,
+   "spelling": "1760000001e0",
+   "verdict": 0
+  },
+  {
+   "accepted": false,
+   "body": "{\"schema\": \"shiporslash/v1\", \"repo_url\": \"https://github.com/SOBEK96/ShipOrSlash\", \"milestone_id\": 1, \"found\": true, \"release_tag\": \"v0.1.0-alpha.1\", \"commit_sha\": \"1111111111111111111111111111111111111111\", \"signature_verified\": true, \"signer_fingerprint_sha256\": \"d8a87fdcd4224662af9b788cae845191b3bc64b8155eb124fdbe0d506e4fcf10\", \"ci_status\": \"success\", \"artifact\": {\"registry\": \"npm\", \"name\": \"@sobek96/shiporslash\", \"version\": \"0.1.0-alpha.1\", \"published\": true, \"digest\": \"sha256:147cacc6e07e45c60a4300a33f24ae75a7ffee98eb956d8de14aea487c803d39\"}, \"verified_ts\": 17600000010e-1}",
+   "field": "verified_ts",
+   "source_count": 3,
+   "spelling": "17600000010e-1",
+   "verdict": 0
+  },
+  {
+   "accepted": false,
+   "body": "{\"schema\": \"shiporslash/v1\", \"repo_url\": \"https://github.com/SOBEK96/ShipOrSlash\", \"milestone_id\": 1, \"found\": true, \"release_tag\": \"v0.1.0-alpha.1\", \"commit_sha\": \"1111111111111111111111111111111111111111\", \"signature_verified\": true, \"signer_fingerprint_sha256\": \"d8a87fdcd4224662af9b788cae845191b3bc64b8155eb124fdbe0d506e4fcf10\", \"ci_status\": \"success\", \"artifact\": {\"registry\": \"npm\", \"name\": \"@sobek96/shiporslash\", \"version\": \"0.1.0-alpha.1\", \"published\": true, \"digest\": \"sha256:147cacc6e07e45c60a4300a33f24ae75a7ffee98eb956d8de14aea487c803d39\"}, \"verified_ts\": 1760000001E+0}",
+   "field": "verified_ts",
+   "source_count": 3,
+   "spelling": "1760000001E+0",
+   "verdict": 0
+  },
+  {
+   "accepted": true,
+   "body": "{\"schema\": \"shiporslash/v1\", \"repo_url\": \"https://github.com/SOBEK96/ShipOrSlash\", \"milestone_id\": 1, \"found\": true, \"release_tag\": \"v0.1.0-alpha.1\", \"commit_sha\": \"1111111111111111111111111111111111111111\", \"signature_verified\": true, \"signer_fingerprint_sha256\": \"d8a87fdcd4224662af9b788cae845191b3bc64b8155eb124fdbe0d506e4fcf10\", \"ci_status\": \"success\", \"artifact\": {\"registry\": \"npm\", \"name\": \"@sobek96/shiporslash\", \"version\": \"0.1.0-alpha.1\", \"published\": true, \"digest\": \"sha256:147cacc6e07e45c60a4300a33f24ae75a7ffee98eb956d8de14aea487c803d39\"}, \"verified_ts\": 9007199254740993}",
+   "field": "verified_ts",
+   "source_count": 3,
+   "spelling": "9007199254740993",
+   "verdict": 1
+  },
+  {
+   "accepted": true,
+   "body": "{\"schema\": \"shiporslash/v1\", \"repo_url\": \"https://github.com/SOBEK96/ShipOrSlash\", \"milestone_id\": 1, \"found\": true, \"release_tag\": \"v0.1.0-alpha.1\", \"commit_sha\": \"1111111111111111111111111111111111111111\", \"signature_verified\": true, \"signer_fingerprint_sha256\": \"d8a87fdcd4224662af9b788cae845191b3bc64b8155eb124fdbe0d506e4fcf10\", \"ci_status\": \"success\", \"artifact\": {\"registry\": \"npm\", \"name\": \"@sobek96/shiporslash\", \"version\": \"0.1.0-alpha.1\", \"published\": true, \"digest\": \"sha256:147cacc6e07e45c60a4300a33f24ae75a7ffee98eb956d8de14aea487c803d39\"}, \"verified_ts\": 9007199254740992}",
+   "field": "verified_ts",
+   "source_count": 3,
+   "spelling": "9007199254740992",
+   "verdict": 1
+  },
+  {
+   "accepted": true,
+   "body": "{\"schema\": \"shiporslash/v1\", \"repo_url\": \"https://github.com/SOBEK96/ShipOrSlash\", \"milestone_id\": 1, \"found\": true, \"release_tag\": \"v0.1.0-alpha.1\", \"commit_sha\": \"1111111111111111111111111111111111111111\", \"signature_verified\": true, \"signer_fingerprint_sha256\": \"d8a87fdcd4224662af9b788cae845191b3bc64b8155eb124fdbe0d506e4fcf10\", \"ci_status\": \"success\", \"artifact\": {\"registry\": \"npm\", \"name\": \"@sobek96/shiporslash\", \"version\": \"0.1.0-alpha.1\", \"published\": true, \"digest\": \"sha256:147cacc6e07e45c60a4300a33f24ae75a7ffee98eb956d8de14aea487c803d39\"}, \"verified_ts\": 123456789012345678901234567890}",
+   "field": "verified_ts",
+   "source_count": 3,
+   "spelling": "123456789012345678901234567890",
+   "verdict": 1
+  },
+  {
+   "accepted": false,
+   "body": "{\"schema\": \"shiporslash/v1\", \"repo_url\": \"https://github.com/SOBEK96/ShipOrSlash\", \"milestone_id\": 1, \"found\": true, \"release_tag\": \"v0.1.0-alpha.1\", \"commit_sha\": \"1111111111111111111111111111111111111111\", \"signature_verified\": true, \"signer_fingerprint_sha256\": \"d8a87fdcd4224662af9b788cae845191b3bc64b8155eb124fdbe0d506e4fcf10\", \"ci_status\": \"success\", \"artifact\": {\"registry\": \"npm\", \"name\": \"@sobek96/shiporslash\", \"version\": \"0.1.0-alpha.1\", \"published\": true, \"digest\": \"sha256:147cacc6e07e45c60a4300a33f24ae75a7ffee98eb956d8de14aea487c803d39\"}, \"verified_ts\": -5}",
+   "field": "verified_ts",
+   "source_count": 3,
+   "spelling": "-5",
+   "verdict": 0
+  },
+  {
+   "accepted": false,
+   "body": "{\"schema\": \"shiporslash/v1\", \"repo_url\": \"https://github.com/SOBEK96/ShipOrSlash\", \"milestone_id\": 1, \"found\": true, \"release_tag\": \"v0.1.0-alpha.1\", \"commit_sha\": \"1111111111111111111111111111111111111111\", \"signature_verified\": true, \"signer_fingerprint_sha256\": \"d8a87fdcd4224662af9b788cae845191b3bc64b8155eb124fdbe0d506e4fcf10\", \"ci_status\": \"success\", \"artifact\": {\"registry\": \"npm\", \"name\": \"@sobek96/shiporslash\", \"version\": \"0.1.0-alpha.1\", \"published\": true, \"digest\": \"sha256:147cacc6e07e45c60a4300a33f24ae75a7ffee98eb956d8de14aea487c803d39\"}, \"verified_ts\": 0}",
+   "field": "verified_ts",
+   "source_count": 3,
+   "spelling": "0",
+   "verdict": 0
+  },
+  {
+   "accepted": false,
+   "body": "{\"schema\": \"shiporslash/v1\", \"repo_url\": \"https://github.com/SOBEK96/ShipOrSlash\", \"milestone_id\": 1, \"found\": true, \"release_tag\": \"v0.1.0-alpha.1\", \"commit_sha\": \"1111111111111111111111111111111111111111\", \"signature_verified\": true, \"signer_fingerprint_sha256\": \"d8a87fdcd4224662af9b788cae845191b3bc64b8155eb124fdbe0d506e4fcf10\", \"ci_status\": \"success\", \"artifact\": {\"registry\": \"npm\", \"name\": \"@sobek96/shiporslash\", \"version\": \"0.1.0-alpha.1\", \"published\": true, \"digest\": \"sha256:147cacc6e07e45c60a4300a33f24ae75a7ffee98eb956d8de14aea487c803d39\"}, \"verified_ts\": -0}",
+   "field": "verified_ts",
+   "source_count": 3,
+   "spelling": "-0",
+   "verdict": 0
+  },
+  {
+   "accepted": false,
+   "body": "{\"schema\": \"shiporslash/v1\", \"repo_url\": \"https://github.com/SOBEK96/ShipOrSlash\", \"milestone_id\": 1, \"found\": true, \"release_tag\": \"v0.1.0-alpha.1\", \"commit_sha\": \"1111111111111111111111111111111111111111\", \"signature_verified\": true, \"signer_fingerprint_sha256\": \"d8a87fdcd4224662af9b788cae845191b3bc64b8155eb124fdbe0d506e4fcf10\", \"ci_status\": \"success\", \"artifact\": {\"registry\": \"npm\", \"name\": \"@sobek96/shiporslash\", \"version\": \"0.1.0-alpha.1\", \"published\": true, \"digest\": \"sha256:147cacc6e07e45c60a4300a33f24ae75a7ffee98eb956d8de14aea487c803d39\"}, \"verified_ts\": 0.0}",
+   "field": "verified_ts",
+   "source_count": 3,
+   "spelling": "0.0",
+   "verdict": 0
+  },
+  {
+   "accepted": false,
+   "body": "{\"schema\": \"shiporslash/v1\", \"repo_url\": \"https://github.com/SOBEK96/ShipOrSlash\", \"milestone_id\": 1, \"found\": true, \"release_tag\": \"v0.1.0-alpha.1\", \"commit_sha\": \"1111111111111111111111111111111111111111\", \"signature_verified\": true, \"signer_fingerprint_sha256\": \"d8a87fdcd4224662af9b788cae845191b3bc64b8155eb124fdbe0d506e4fcf10\", \"ci_status\": \"success\", \"artifact\": {\"registry\": \"npm\", \"name\": \"@sobek96/shiporslash\", \"version\": \"0.1.0-alpha.1\", \"published\": true, \"digest\": \"sha256:147cacc6e07e45c60a4300a33f24ae75a7ffee98eb956d8de14aea487c803d39\"}, \"verified_ts\": 1e400}",
+   "field": "verified_ts",
+   "source_count": 3,
+   "spelling": "1e400",
+   "verdict": 0
+  },
+  {
+   "accepted": false,
+   "body": "{\"schema\": \"shiporslash/v1\", \"repo_url\": \"https://github.com/SOBEK96/ShipOrSlash\", \"milestone_id\": 1, \"found\": true, \"release_tag\": \"v0.1.0-alpha.1\", \"commit_sha\": \"1111111111111111111111111111111111111111\", \"signature_verified\": true, \"signer_fingerprint_sha256\": \"d8a87fdcd4224662af9b788cae845191b3bc64b8155eb124fdbe0d506e4fcf10\", \"ci_status\": \"success\", \"artifact\": {\"registry\": \"npm\", \"name\": \"@sobek96/shiporslash\", \"version\": \"0.1.0-alpha.1\", \"published\": true, \"digest\": \"sha256:147cacc6e07e45c60a4300a33f24ae75a7ffee98eb956d8de14aea487c803d39\"}, \"verified_ts\": -1e400}",
+   "field": "verified_ts",
+   "source_count": 3,
+   "spelling": "-1e400",
+   "verdict": 0
+  },
+  {
+   "accepted": false,
+   "body": "{\"schema\": \"shiporslash/v1\", \"repo_url\": \"https://github.com/SOBEK96/ShipOrSlash\", \"milestone_id\": 1, \"found\": true, \"release_tag\": \"v0.1.0-alpha.1\", \"commit_sha\": \"1111111111111111111111111111111111111111\", \"signature_verified\": true, \"signer_fingerprint_sha256\": \"d8a87fdcd4224662af9b788cae845191b3bc64b8155eb124fdbe0d506e4fcf10\", \"ci_status\": \"success\", \"artifact\": {\"registry\": \"npm\", \"name\": \"@sobek96/shiporslash\", \"version\": \"0.1.0-alpha.1\", \"published\": true, \"digest\": \"sha256:147cacc6e07e45c60a4300a33f24ae75a7ffee98eb956d8de14aea487c803d39\"}, \"verified_ts\": NaN}",
+   "field": "verified_ts",
+   "source_count": 3,
+   "spelling": "NaN",
+   "verdict": 0
+  },
+  {
+   "accepted": false,
+   "body": "{\"schema\": \"shiporslash/v1\", \"repo_url\": \"https://github.com/SOBEK96/ShipOrSlash\", \"milestone_id\": 1, \"found\": true, \"release_tag\": \"v0.1.0-alpha.1\", \"commit_sha\": \"1111111111111111111111111111111111111111\", \"signature_verified\": true, \"signer_fingerprint_sha256\": \"d8a87fdcd4224662af9b788cae845191b3bc64b8155eb124fdbe0d506e4fcf10\", \"ci_status\": \"success\", \"artifact\": {\"registry\": \"npm\", \"name\": \"@sobek96/shiporslash\", \"version\": \"0.1.0-alpha.1\", \"published\": true, \"digest\": \"sha256:147cacc6e07e45c60a4300a33f24ae75a7ffee98eb956d8de14aea487c803d39\"}, \"verified_ts\": Infinity}",
+   "field": "verified_ts",
+   "source_count": 3,
+   "spelling": "Infinity",
+   "verdict": 0
+  },
+  {
+   "accepted": false,
+   "body": "{\"schema\": \"shiporslash/v1\", \"repo_url\": \"https://github.com/SOBEK96/ShipOrSlash\", \"milestone_id\": 1, \"found\": true, \"release_tag\": \"v0.1.0-alpha.1\", \"commit_sha\": \"1111111111111111111111111111111111111111\", \"signature_verified\": true, \"signer_fingerprint_sha256\": \"d8a87fdcd4224662af9b788cae845191b3bc64b8155eb124fdbe0d506e4fcf10\", \"ci_status\": \"success\", \"artifact\": {\"registry\": \"npm\", \"name\": \"@sobek96/shiporslash\", \"version\": \"0.1.0-alpha.1\", \"published\": true, \"digest\": \"sha256:147cacc6e07e45c60a4300a33f24ae75a7ffee98eb956d8de14aea487c803d39\"}, \"verified_ts\": -Infinity}",
+   "field": "verified_ts",
+   "source_count": 3,
+   "spelling": "-Infinity",
+   "verdict": 0
+  },
+  {
+   "accepted": false,
+   "body": "{\"schema\": \"shiporslash/v1\", \"repo_url\": \"https://github.com/SOBEK96/ShipOrSlash\", \"milestone_id\": 1, \"found\": true, \"release_tag\": \"v0.1.0-alpha.1\", \"commit_sha\": \"1111111111111111111111111111111111111111\", \"signature_verified\": true, \"signer_fingerprint_sha256\": \"d8a87fdcd4224662af9b788cae845191b3bc64b8155eb124fdbe0d506e4fcf10\", \"ci_status\": \"success\", \"artifact\": {\"registry\": \"npm\", \"name\": \"@sobek96/shiporslash\", \"version\": \"0.1.0-alpha.1\", \"published\": true, \"digest\": \"sha256:147cacc6e07e45c60a4300a33f24ae75a7ffee98eb956d8de14aea487c803d39\"}, \"verified_ts\": 00}",
+   "field": "verified_ts",
+   "source_count": 0,
+   "spelling": "00",
+   "verdict": 2
+  },
+  {
+   "accepted": false,
+   "body": "{\"schema\": \"shiporslash/v1\", \"repo_url\": \"https://github.com/SOBEK96/ShipOrSlash\", \"milestone_id\": 1, \"found\": true, \"release_tag\": \"v0.1.0-alpha.1\", \"commit_sha\": \"1111111111111111111111111111111111111111\", \"signature_verified\": true, \"signer_fingerprint_sha256\": \"d8a87fdcd4224662af9b788cae845191b3bc64b8155eb124fdbe0d506e4fcf10\", \"ci_status\": \"success\", \"artifact\": {\"registry\": \"npm\", \"name\": \"@sobek96/shiporslash\", \"version\": \"0.1.0-alpha.1\", \"published\": true, \"digest\": \"sha256:147cacc6e07e45c60a4300a33f24ae75a7ffee98eb956d8de14aea487c803d39\"}, \"verified_ts\": 1_000}",
+   "field": "verified_ts",
+   "source_count": 0,
+   "spelling": "1_000",
+   "verdict": 2
+  },
+  {
+   "accepted": false,
+   "body": "{\"schema\": \"shiporslash/v1\", \"repo_url\": \"https://github.com/SOBEK96/ShipOrSlash\", \"milestone_id\": 1, \"found\": true, \"release_tag\": \"v0.1.0-alpha.1\", \"commit_sha\": \"1111111111111111111111111111111111111111\", \"signature_verified\": true, \"signer_fingerprint_sha256\": \"d8a87fdcd4224662af9b788cae845191b3bc64b8155eb124fdbe0d506e4fcf10\", \"ci_status\": \"success\", \"artifact\": {\"registry\": \"npm\", \"name\": \"@sobek96/shiporslash\", \"version\": \"0.1.0-alpha.1\", \"published\": true, \"digest\": \"sha256:147cacc6e07e45c60a4300a33f24ae75a7ffee98eb956d8de14aea487c803d39\"}, \"verified_ts\": true}",
+   "field": "verified_ts",
+   "source_count": 3,
+   "spelling": "true",
+   "verdict": 0
+  },
+  {
+   "accepted": false,
+   "body": "{\"schema\": \"shiporslash/v1\", \"repo_url\": \"https://github.com/SOBEK96/ShipOrSlash\", \"milestone_id\": 1, \"found\": true, \"release_tag\": \"v0.1.0-alpha.1\", \"commit_sha\": \"1111111111111111111111111111111111111111\", \"signature_verified\": true, \"signer_fingerprint_sha256\": \"d8a87fdcd4224662af9b788cae845191b3bc64b8155eb124fdbe0d506e4fcf10\", \"ci_status\": \"success\", \"artifact\": {\"registry\": \"npm\", \"name\": \"@sobek96/shiporslash\", \"version\": \"0.1.0-alpha.1\", \"published\": true, \"digest\": \"sha256:147cacc6e07e45c60a4300a33f24ae75a7ffee98eb956d8de14aea487c803d39\"}, \"verified_ts\": \"1760000001\"}",
+   "field": "verified_ts",
+   "source_count": 3,
+   "spelling": "\"1760000001\"",
+   "verdict": 0
+  },
+  {
+   "accepted": false,
+   "body": "{\"schema\": \"shiporslash/v1\", \"repo_url\": \"https://github.com/SOBEK96/ShipOrSlash\", \"milestone_id\": 1, \"found\": true, \"release_tag\": \"v0.1.0-alpha.1\", \"commit_sha\": \"1111111111111111111111111111111111111111\", \"signature_verified\": true, \"signer_fingerprint_sha256\": \"d8a87fdcd4224662af9b788cae845191b3bc64b8155eb124fdbe0d506e4fcf10\", \"ci_status\": \"success\", \"artifact\": {\"registry\": \"npm\", \"name\": \"@sobek96/shiporslash\", \"version\": \"0.1.0-alpha.1\", \"published\": true, \"digest\": \"sha256:147cacc6e07e45c60a4300a33f24ae75a7ffee98eb956d8de14aea487c803d39\"}, \"verified_ts\": null}",
+   "field": "verified_ts",
+   "source_count": 3,
+   "spelling": "null",
+   "verdict": 0
+  },
+  {
+   "accepted": false,
+   "body": "{\"schema\": \"shiporslash/v1\", \"repo_url\": \"https://github.com/SOBEK96/ShipOrSlash\", \"milestone_id\": 1, \"found\": true, \"release_tag\": \"v0.1.0-alpha.1\", \"commit_sha\": \"1111111111111111111111111111111111111111\", \"signature_verified\": true, \"signer_fingerprint_sha256\": \"d8a87fdcd4224662af9b788cae845191b3bc64b8155eb124fdbe0d506e4fcf10\", \"ci_status\": \"success\", \"artifact\": {\"registry\": \"npm\", \"name\": \"@sobek96/shiporslash\", \"version\": \"0.1.0-alpha.1\", \"published\": true, \"digest\": \"sha256:147cacc6e07e45c60a4300a33f24ae75a7ffee98eb956d8de14aea487c803d39\"}, \"verified_ts\": 1e2}",
+   "field": "verified_ts",
+   "source_count": 3,
+   "spelling": "1e2",
+   "verdict": 0
+  },
+  {
+   "accepted": false,
+   "body": "{\"schema\": \"shiporslash/v1\", \"repo_url\": \"https://github.com/SOBEK96/ShipOrSlash\", \"milestone_id\": 1, \"found\": true, \"release_tag\": \"v0.1.0-alpha.1\", \"commit_sha\": \"1111111111111111111111111111111111111111\", \"signature_verified\": true, \"signer_fingerprint_sha256\": \"d8a87fdcd4224662af9b788cae845191b3bc64b8155eb124fdbe0d506e4fcf10\", \"ci_status\": \"success\", \"artifact\": {\"registry\": \"npm\", \"name\": \"@sobek96/shiporslash\", \"version\": \"0.1.0-alpha.1\", \"published\": true, \"digest\": \"sha256:147cacc6e07e45c60a4300a33f24ae75a7ffee98eb956d8de14aea487c803d39\"}, \"verified_ts\": 5e-1}",
+   "field": "verified_ts",
+   "source_count": 3,
+   "spelling": "5e-1",
+   "verdict": 0
+  },
+  {
+   "accepted": true,
+   "body": "{\"schema\": \"shiporslash/v1\", \"repo_url\": \"https://github.com/SOBEK96/ShipOrSlash\", \"milestone_id\": 1, \"found\": true, \"release_tag\": \"v0.1.0-alpha.1\", \"commit_sha\": \"1111111111111111111111111111111111111111\", \"signature_verified\": true, \"signer_fingerprint_sha256\": \"d8a87fdcd4224662af9b788cae845191b3bc64b8155eb124fdbe0d506e4fcf10\", \"ci_status\": \"success\", \"artifact\": {\"registry\": \"npm\", \"name\": \"@sobek96/shiporslash\", \"version\": \"0.1.0-alpha.1\", \"published\": true, \"digest\": \"sha256:147cacc6e07e45c60a4300a33f24ae75a7ffee98eb956d8de14aea487c803d39\"}, \"verified_ts\": 1760000001 }",
+   "field": "verified_ts",
+   "source_count": 3,
+   "spelling": "1760000001 ",
+   "verdict": 1
+  }
+ ],
+ "generated_by": "tests/test_ship_or_slash.py::test_json_number_vectors_file_is_current",
+ "rule": "accepted == the contract returned VERIFIED for three mirrors serving this body"
+}

@@ -112,7 +112,7 @@ export default function Home() {
           />
         </div>
 
-        <VaultCreator account={c.account} busy={c.busy} nowSeconds={now} onCreate={(i) => void c.createVault(i)} />
+        <VaultCreator account={c.account} busy={c.busy} onCreate={(i) => void c.createVault(i)} />
         <ProtocolExplainer />
       </main>
       <Footer />
