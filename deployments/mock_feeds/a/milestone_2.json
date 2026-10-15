@@ -1,0 +1,22 @@
+{
+  "artifact": {
+    "digest": "sha256:bf939c63da23a71743cb389a9edaf8cb54644e5ada6355c97a0ab8cfc4df41cc",
+    "name": "@sobek96/shiporslash",
+    "published": true,
+    "registry": "npm",
+    "version": "0.9.0-rc.1"
+  },
+  "ci_status": "success",
+  "commit_sha": "2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b",
+  "found": true,
+  "milestone_id": 2,
+  "mock": true,
+  "release_tag": "v0.9.0-rc.1",
+  "repo_url": "https://github.com/SOBEK96/ShipOrSlash",
+  "role": "github-release-verifier",
+  "schema": "shiporslash/v1",
+  "signature_verified": true,
+  "signer_fingerprint_sha256": "d8a87fdcd4224662af9b788cae845191b3bc64b8155eb124fdbe0d506e4fcf10",
+  "slot": "A",
+  "verified_ts": 1760172800
+}
