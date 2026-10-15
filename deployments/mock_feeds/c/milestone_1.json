@@ -1,9 +1,9 @@
 {
   "artifact": {
-    "digest": "sha256:d801dde2518803a498c92e8c72f3cb88ad8adf43ec0f0069a1f7a4e739d01e24",
-    "name": "sobek96/shiporslash",
+    "digest": "sha256:e2d96cade72ea1e1d4c735f44b99fecde641440b550440725e63319be14e6b9b",
+    "name": "@sobek96/shiporslash",
     "published": true,
-    "registry": "docker",
+    "registry": "npm",
     "version": "0.1.0-alpha.1"
   },
   "ci_status": "success",

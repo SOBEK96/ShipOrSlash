@@ -28,17 +28,23 @@ MILESTONES = {
     2: ("v0.9.0-rc.1", "2b" * 20),
     3: ("v1.0.0", "3c" * 20),
 }
-# slot -> (role, artifact registry the slot reports, timestamp skew in seconds)
+# slot -> (role, timestamp skew in seconds). Every mirror attests the SAME
+# artifact (registry, name and digest): the contract groups confirmations by the
+# whole release identity, so mirrors vouching for different artifacts do not
+# corroborate each other. Skewed timestamps keep the three observations
+# distinct.
+ARTIFACT_REGISTRY = "npm"
 SLOTS = {
-    "a": ("github-release-verifier", "npm", 0),
-    "b": ("ci-status-mirror", "npm", 7),
-    "c": ("package-registry-mirror", "docker", 13),
+    "a": ("github-release-verifier", 0),
+    "b": ("ci-status-mirror", 7),
+    "c": ("package-registry-mirror", 13),
 }
 
 
 def record(slot: str, milestone: int) -> dict:
     tag, commit = MILESTONES[milestone]
-    role, registry, skew = SLOTS[slot]
+    role, skew = SLOTS[slot]
+    registry = ARTIFACT_REGISTRY
     return {
         "schema": "shiporslash/v1",
         "mock": True,
