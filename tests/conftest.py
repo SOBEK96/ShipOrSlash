@@ -164,8 +164,12 @@ def hexaddr(contract, direct_vm, who) -> str:
     return h
 
 
-def create(c, vm, funder, beneficiary, value=DEPOSIT, **kw):
-    """Create a vault as `funder`; returns the vault id."""
+def create(c, vm, funder, beneficiary, value=DEPOSIT, accept=True, **kw):
+    """Create a vault as `funder`; returns the vault id.
+
+    A new vault is only an offer until the beneficiary accepts it, so by default
+    this also calls accept_vault_terms as `beneficiary` and returns an ACTIVE
+    vault. Pass accept=False to get the PENDING_ACCEPTANCE offer itself."""
     args = dict(
         beneficiary_hex=hexaddr(c, vm, beneficiary),
         repo_url=REPO,
@@ -183,9 +187,13 @@ def create(c, vm, funder, beneficiary, value=DEPOSIT, **kw):
     vm.sender = funder
     vm.value = value
     try:
-        return c.create_vault(**args)
+        vid = c.create_vault(**args)
     finally:
         vm.value = 0
+    if accept:
+        vm.sender = beneficiary
+        c.accept_vault_terms(vid)
+    return vid
 
 
 def claim(c, vm, who, vault_id, milestone, states=("ok", "ok", "ok")):
@@ -203,25 +211,23 @@ def ship_all(c, vm, who, vault_id, upto=3):
 
 
 def quorum_oracle(states: tuple) -> int:
-    """Independent restatement of the 2-of-3 verdict for the spec's source
-    states, used to cross-check the contract over the whole 4^3 state space.
+    """Independent restatement of the verdict rule, used to cross-check the
+    contract over the whole 4^3 state space.
 
-    states: each one of "C" (confirmed, all agreeing), "F" (failed/missing
-    record), "N" (404), "O" (outage)."""
+    states: each one of "C" (confirmed, all agreeing), "F" (an explicit
+    rejection: the mirror answered and its record says the release is invalid),
+    "N" (404 / lag: proves nothing) or "O" (outage: proves nothing).
+
+    Two agreeing confirmations verify. Two explicit rejections reject. Every
+    other combination is unproven either way, and unproven is retryable: a
+    missing record is never a rejection."""
     c = states.count("C")
-    f = states.count("F") + states.count("N")
-    o = states.count("O")
-    responded = c + f
-    if responded < 2:
-        return VERDICT_QF
+    f = states.count("F")
     if c >= 2:
         return VERDICT_VERIFIED
     if f >= 2:
         return VERDICT_REJECTED
-    # exactly: c == 1, f == 1, o == 1 (the only mixed case with a pending vote)
-    if o >= 1 and (c + o >= 2 or f + o >= 2):
-        return VERDICT_QF
-    return VERDICT_REJECTED
+    return VERDICT_QF
 
 
 def credit_contract(vm, amount: int) -> None:

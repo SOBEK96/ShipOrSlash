@@ -1,6 +1,19 @@
 # v0.3.0
 # { "Depends": "py-genlayer:5jycge4q8k23462jtb0b9fyey1s9qz928sz2nbrd9mg4sxqg2qng" }
 
+# ShipOrSlash: milestone-bound token vesting with code-verified releases.
+#
+# A funder escrows native GEN in a vault bound to a repository registry and
+# three verifier mirrors. Because the FUNDER chooses those mirrors, a new vault
+# is only an offer (PENDING_ACCEPTANCE): the beneficiary must inspect it and
+# call accept_vault_terms() inside a 48-hour window. If they reject it or let
+# it lapse, the funder recovers 100% of the principal (cancel_vault). Once
+# accepted, three fixed tranches (20/30/50%) unlock when two of three
+# independent mirrors corroborate a signed, CI-passing, published SemVer
+# release. A release is rejected only on positive proof of failure (two mirrors
+# explicitly reporting it invalid); 404s, in-flight CI and outages are lag and
+# are retryable. No Python float anywhere; no LLM.
+
 import json
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -26,6 +39,7 @@ ERR_NO_BALANCE = "ERR_NO_WITHDRAWABLE_BALANCE"
 ERR_NOT_EXPIRED = "ERR_DEADLINE_NOT_REACHED"
 ERR_TRANSFER = "ERR_TRANSFER_FAILED_RESTORED"
 ERR_PAYLOAD = "ERR_INVALID_VERIFIER_PAYLOAD"
+ERR_WINDOW = "ERR_ACCEPTANCE_WINDOW"
 
 # --- Verdicts (the only three the aggregate can produce) --------------------
 VERDICT_REJECTED = 0
@@ -42,6 +56,9 @@ SRC_OUTAGE = "OUTAGE"
 ST_ACTIVE = "ACTIVE"
 ST_COMPLETE = "COMPLETE"
 ST_SLASHED = "SLASHED"
+ST_PENDING = "PENDING_ACCEPTANCE"  # an offer: nothing can be claimed yet
+ST_REJECTED = "REJECTED"  # the beneficiary declined; the funder may cancel
+ST_CANCELLED = "CANCELLED"  # principal returned to the funder
 
 # --- Tranche buckets (integer basis points, 10000 == 100%) ------------------
 BPS_DENOM = 10000
@@ -63,7 +80,12 @@ SLOTS = ("A", "B", "C")
 # --- Economics (atto-scale: value * 10 ** 18) -------------------------------
 ATTO = 10**18
 MIN_DEPOSIT = ATTO // 1000  # 0.001 GEN: every tranche is strictly positive
-MIN_WINDOW = 86400  # a vault must run at least one day
+ACCEPTANCE_WINDOW = 2 * 86400  # the beneficiary has 48 hours to inspect and accept
+MIN_WINDOW = 86400  # once accepted, a vault still runs at least one full day
+# The deadline must leave the whole acceptance window usable AND a full day
+# after it, so a beneficiary who accepts at the last moment is never left with
+# less than MIN_WINDOW to ship.
+MIN_DEADLINE_WINDOW = ACCEPTANCE_WINDOW + MIN_WINDOW
 MAX_WINDOW = 5 * 365 * 86400  # ... and at most five years
 GENESIS_ZERO = "0x0000000000000000000000000000000000000000"
 
@@ -397,13 +419,18 @@ def _aggregate(results: list, milestone_id: int) -> dict:
     """The five-step fault-tolerant quorum. Pure and deterministic.
 
     1. Tally every source into CONFIRMED / FAILED / NOT_FOUND / OUTAGE.
+       FAILED is positive proof: the mirror answered and its record says the
+       release is not valid (found=false, unsigned, wrong signer, CI failure,
+       wrong artifact ...). NOT_FOUND (404, CI still running, package not yet
+       published) and OUTAGE are LAG: they prove nothing either way.
     2. Fewer than 2 sources answered -> QUORUM_FAILURE (retryable).
     3. Two or more CONFIRMED records that agree on the whole release identity
        -- (tag, commit_sha, artifact registry, artifact digest) -> VERIFIED.
-    4. Two or more sources that failed or are missing the tag -> REJECTED.
-    5. Otherwise, if the unreachable source could still complete a 2-of-3
-       quorum -> QUORUM_FAILURE; if no outstanding source can change the
-       outcome (a conflict) -> REJECTED.
+    4. Two or more FAILED records -> REJECTED. Only explicit rejections can
+       reject; a missing record never does.
+    5. Anything else is unproven either way -> QUORUM_FAILURE: a lone
+       confirmation beside 404s, a 404 or outage that could still complete a
+       quorum, mirrors that disagree. Retryable; nothing about the vault changes.
 
     Returns {"payload": <the exact five-field verdict>, "commit_sha": str,
     "artifact_digest": str}. The identity travels beside the payload so the
@@ -445,14 +472,13 @@ def _aggregate(results: list, milestone_id: int) -> dict:
     if best_size >= QUORUM:
         return wrap(VERDICT_VERIFIED, best_key[0], min(groups[best_key]), best_key[1], best_key[3])
 
-    # Step 4: corroborated rejection.
-    if failed + missing >= QUORUM:
+    # Step 4: positive proof of failure -- two mirrors explicitly reject.
+    if failed >= QUORUM:
         return wrap(VERDICT_REJECTED)
 
-    # Step 5: the outstanding source decides, or nothing can.
-    if outage >= 1 and (best_size + outage >= QUORUM or failed + missing + outage >= QUORUM):
-        return wrap(VERDICT_QUORUM_FAILURE)
-    return wrap(VERDICT_REJECTED)
+    # Step 5: unproven either way. Lag (404, in-flight CI, unpublished package,
+    # outage) and disagreement are retryable, never a rejection.
+    return wrap(VERDICT_QUORUM_FAILURE)
 
 
 def _payload_ok(p, milestone_id: int) -> bool:
@@ -474,8 +500,8 @@ def _payload_ok(p, milestone_id: int) -> bool:
     if tag != "" or ts != 0:
         return False
     if v == VERDICT_QUORUM_FAILURE:
-        return c < SOURCES
-    return c >= QUORUM  # REJECTED needs two witnesses
+        return True  # retryable at any response count, including all three 404
+    return c >= QUORUM  # REJECTED needs two explicit rejections
 
 
 def _digest_ok(d) -> bool:
@@ -569,6 +595,8 @@ class Vault:
     last_source_count: u256
     last_attempt_at: u256
     last_milestone: u256
+    accept_deadline: u256  # the offer lapses (the funder may cancel) after this
+    accepted_at: u256  # 0 until the beneficiary accepts
 
 
 class ShipOrSlash(gl.contract.Contract):
@@ -577,12 +605,14 @@ class ShipOrSlash(gl.contract.Contract):
     total_escrow: u256  # deposited - withdrawn - reclaimed, across all vaults
     total_released: u256
     total_slashed: u256
+    total_cancelled: u256  # principal returned by cancel_vault
 
     def __init__(self):
         self.next_vault_id = 1
         self.total_escrow = 0
         self.total_released = 0
         self.total_slashed = 0
+        self.total_cancelled = 0
 
     # ------------------------------------------------------------ internals
     def _now(self) -> int:
@@ -612,6 +642,10 @@ class ShipOrSlash(gl.contract.Contract):
         else:
             if v.status == ST_SLASHED:
                 status = "SLASHED"
+            elif v.status == ST_REJECTED or v.status == ST_CANCELLED:
+                status = "CANCELLED"
+            elif v.status == ST_PENDING:
+                status = "LOCKED"  # nothing is claimable until the offer is accepted
             else:
                 status = "PENDING" if k == done + 1 else "LOCKED"
             if k == done + 1:
@@ -654,7 +688,9 @@ class ShipOrSlash(gl.contract.Contract):
             "sources": SOURCES,
             "schema": SCHEMA,
             "min_deposit": str(MIN_DEPOSIT),
+            "acceptance_window": ACCEPTANCE_WINDOW,
             "min_window": MIN_WINDOW,
+            "min_deadline_window": MIN_DEADLINE_WINDOW,
             "max_window": MAX_WINDOW,
         }
 
@@ -666,6 +702,7 @@ class ShipOrSlash(gl.contract.Contract):
             "total_escrow": str(self.total_escrow),
             "total_released": str(self.total_released),
             "total_slashed": str(self.total_slashed),
+            "total_cancelled": str(self.total_cancelled),
             "contract_balance": str(self.balance),
             "solvent": self.balance >= self.total_escrow,
         }
@@ -687,6 +724,8 @@ class ShipOrSlash(gl.contract.Contract):
             "feeds": self._feeds(v),
             "deadline": int(v.deadline),
             "created_at": int(v.created_at),
+            "accept_deadline": int(v.accept_deadline),
+            "accepted_at": int(v.accepted_at),
             "deposited": str(deposited),
             "released": str(released),
             "withdrawn": str(int(v.withdrawn)),
@@ -823,7 +862,7 @@ class ShipOrSlash(gl.contract.Contract):
             raise gl.vm.UserError(f"{ERR_FEEDS} verifier operators must be three distinct operators")
 
         now = self._now()
-        if int(deadline) < now + MIN_WINDOW or int(deadline) > now + MAX_WINDOW:
+        if int(deadline) < now + MIN_DEADLINE_WINDOW or int(deadline) > now + MAX_WINDOW:
             raise gl.vm.UserError(f"{ERR_PARAMS} deadline outside the allowed window")
 
         vault_id = self.next_vault_id
@@ -841,7 +880,7 @@ class ShipOrSlash(gl.contract.Contract):
             feed_c=feed_c,
             deadline=int(deadline),
             created_at=now,
-            status=ST_ACTIVE,
+            status=ST_PENDING,
             deposited=value,
             released=0,
             withdrawn=0,
@@ -857,9 +896,77 @@ class ShipOrSlash(gl.contract.Contract):
             last_source_count=0,
             last_attempt_at=0,
             last_milestone=0,
+            accept_deadline=now + ACCEPTANCE_WINDOW,
+            accepted_at=0,
         )
         self.total_escrow += value
         return vault_id
+
+    @gl.public.write
+    def accept_vault_terms(self, vault_id: u256) -> None:
+        """The beneficiary's explicit acceptance. The funder chose the verifier
+        mirrors, so until this call the vault is only an offer: no tranche can be
+        claimed and the funder cannot change anything, but the funder can cancel
+        once the window lapses. Inspect the repository, signer, package targets
+        and all three mirrors BEFORE calling this; after it, the registry is
+        binding on both sides."""
+        v = self._vault(vault_id)
+        if gl.message.sender_address != v.beneficiary:
+            raise gl.vm.UserError(f"{ERR_UNAUTHORIZED} only the beneficiary may accept")
+        if v.status != ST_PENDING:
+            raise gl.vm.UserError(f"{ERR_STATE} vault is {v.status}")
+        now = self._now()
+        if now > int(v.accept_deadline):
+            raise gl.vm.UserError(f"{ERR_WINDOW} the acceptance window has closed")
+        v.status = ST_ACTIVE
+        v.accepted_at = now
+        self.vaults[vault_id] = v
+
+    @gl.public.write
+    def reject_vault_terms(self, vault_id: u256) -> None:
+        """The beneficiary declines the offer. The funder can then cancel at once
+        and recover the whole principal."""
+        v = self._vault(vault_id)
+        if gl.message.sender_address != v.beneficiary:
+            raise gl.vm.UserError(f"{ERR_UNAUTHORIZED} only the beneficiary may reject")
+        if v.status != ST_PENDING:
+            raise gl.vm.UserError(f"{ERR_STATE} vault is {v.status}")
+        v.status = ST_REJECTED
+        self.vaults[vault_id] = v
+
+    @gl.public.write
+    def cancel_vault(self, vault_id: u256) -> str:
+        """The funder recovers 100% of the principal, with no penalty, when the
+        beneficiary rejected the offer or the acceptance window lapsed without
+        acceptance. The funder cannot withdraw the offer while the window is
+        still open: the beneficiary is owed the full time to inspect it."""
+        v = self._vault(vault_id)
+        if gl.message.sender_address != v.funder:
+            raise gl.vm.UserError(f"{ERR_UNAUTHORIZED} only the funder may cancel")
+        prior = v.status
+        lapsed = prior == ST_PENDING and self._now() > int(v.accept_deadline)
+        if prior != ST_REJECTED and not lapsed:
+            if prior == ST_PENDING:
+                raise gl.vm.UserError(f"{ERR_WINDOW} the acceptance window is still open")
+            raise gl.vm.UserError(f"{ERR_STATE} vault is {prior}")
+        amount = int(v.deposited) - int(v.reclaimed)
+        if amount <= 0:
+            raise gl.vm.UserError(f"{ERR_NO_BALANCE}")
+        v.reclaimed = amount
+        v.status = ST_CANCELLED
+        self.vaults[vault_id] = v
+        self.total_escrow -= amount
+        self.total_cancelled += amount
+        try:
+            gl.chain.Account(v.funder).emit_transfer(amount, on="finalized")
+        except Exception:
+            v.reclaimed = 0
+            v.status = prior
+            self.vaults[vault_id] = v
+            self.total_escrow += amount
+            self.total_cancelled -= amount
+            raise gl.vm.UserError(f"{ERR_TRANSFER}")
+        return str(amount)
 
     @gl.public.write.payable
     def top_up_vault(self, vault_id: u256) -> None:

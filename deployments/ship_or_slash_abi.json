@@ -1,6 +1,6 @@
 {
   "contract": "ShipOrSlash",
-  "address": "0x059c675971F5c095BD9aa4B7C942DF7287BbcDc6",
+  "address": "0x82045afB84e9B14dC262bA581b32837f640abdd0",
   "network": "studio-next",
   "chain_id": 61997,
   "schema": {
@@ -9,6 +9,30 @@
       "kwparams": {}
     },
     "methods": {
+      "accept_vault_terms": {
+        "params": [
+          [
+            "vault_id",
+            "int"
+          ]
+        ],
+        "kwparams": {},
+        "readonly": false,
+        "ret": "null",
+        "payable": false
+      },
+      "cancel_vault": {
+        "params": [
+          [
+            "vault_id",
+            "int"
+          ]
+        ],
+        "kwparams": {},
+        "readonly": false,
+        "ret": "string",
+        "payable": false
+      },
       "claim_milestone": {
         "params": [
           [
@@ -147,6 +171,18 @@
         "kwparams": {},
         "readonly": false,
         "ret": "string",
+        "payable": false
+      },
+      "reject_vault_terms": {
+        "params": [
+          [
+            "vault_id",
+            "int"
+          ]
+        ],
+        "kwparams": {},
+        "readonly": false,
+        "ret": "null",
         "payable": false
       },
       "top_up_vault": {

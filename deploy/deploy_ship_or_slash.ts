@@ -8,16 +8,27 @@
  *   SHIPORSLASH_FOUNDER=0x<beneficiary> SHIPORSLASH_FEED_PIN=<commit sha> \
  *     genlayer deploy
  *
- * What it does, in order, and stops loudly at the first thing that is wrong:
+ * A new vault is only an OFFER: the funder chooses the verifier mirrors, so the
+ * beneficiary must inspect them and call accept_vault_terms from their own
+ * wallet before anything can be claimed. The script therefore runs in two
+ * passes, and is safe to re-run:
  *
- *   1. Deploys the contract (or reuses SHIPORSLASH_ADDRESS if set).
- *   2. Seeds a vault with 0.5 GEN, bound to the founder and to three
- *      commit-pinned verifier mirrors on three distinct hosts and operators.
- *   3. Sends a live claim_milestone(1) and requires the receipt to be decided,
- *      executed to a return, and agreed by a validator majority.
- *   4. Reads the result back from the chain (get_vault_state,
- *      get_milestone_status, get_verifier_sources) and records addresses, hashes
- *      and the exact readbacks in deployments/studio-next.json.
+ *   pass 1 (as the funder)   deploy (or reuse SHIPORSLASH_ADDRESS), create the
+ *                            vault with 0.5 GEN, read the new id from the
+ *                            transaction's own receipt, report
+ *                            PENDING_ACCEPTANCE and stop.
+ *   (as the beneficiary)     genlayer account use shiporslash-founder
+ *                            genlayer write <addr> accept_vault_terms --args <id> --fees ...
+ *   pass 2 (as the funder)   SHIPORSLASH_ADDRESS=<addr> SHIPORSLASH_VAULT_ID=<id> genlayer deploy
+ *                            sees the vault ACTIVE, sends a live
+ *                            claim_milestone(1) and requires the receipt to be
+ *                            decided, executed to a return, and agreed by a
+ *                            validator majority.
+ *
+ * Both passes read the result back from the chain (get_vault_state,
+ * get_milestone_status, get_verifier_sources) and record addresses, hashes and
+ * the exact readbacks in deployments/studio-next.json. It stops loudly at the
+ * first thing that is wrong.
  *
  * Nothing here holds a key: signing is the CLI's. Types are structural because
  * the CLI resolves the SDK from its own installation.
@@ -28,9 +39,9 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 const CONTRACT_PATH = "contracts/ship_or_slash.py";
-const RECORD_PATH = "deployments/studio-next.json";
+const RECORD_PATH = process.env.SHIPORSLASH_RECORD_PATH ?? "deployments/studio-next.json";
 const DEFAULT_PIN = "2d32a3d0968cb48960374dcceb7a0f75434e4d59";
-const SEED_WEI = 500_000_000_000_000_000n; // 0.5 GEN
+const SEED_WEI = process.env.SHIPORSLASH_SEED_WEI ? BigInt(process.env.SHIPORSLASH_SEED_WEI) : 500_000_000_000_000_000n; // default 0.5 GEN
 const DEADLINE_DAYS = 30;
 // Synthetic demo key: sha256 of the fingerprint the mock fixtures commit.
 const DEMO_SIGNER_HASH = "d8a87fdcd4224662af9b788cae845191b3bc64b8155eb124fdbe0d506e4fcf10";
@@ -51,6 +62,7 @@ interface Receipt {
   result?: string | number;
   data?: { contract_address?: string };
   txDataDecoded?: { contractAddress?: string };
+  consensus_data?: unknown;
   [k: string]: unknown;
 }
 
@@ -135,6 +147,19 @@ function plain(v: unknown): unknown {
   return v;
 }
 
+/** The id create_vault returned, from the leader's entry in the receipt. */
+function idFromReceipt(r: Receipt): number {
+  const cd = (r.consensus_data ?? (r as Record<string, unknown>).consensusData) as { leader_receipt?: unknown } | undefined;
+  const list = Array.isArray(cd?.leader_receipt) ? (cd!.leader_receipt as Record<string, any>[]) : [];
+  const leaders = list.filter((e) => e && e.mode === "leader");
+  if (leaders.length !== 1) throw new Error("receipt has no unique leader entry; cannot read the vault id");
+  const readable = leaders[0]!.result?.payload?.readable;
+  if (typeof readable !== "string" || !/^[1-9][0-9]*$/.test(readable)) {
+    throw new Error(`create_vault did not return a positive integer id (got ${JSON.stringify(readable)})`);
+  }
+  return Number(readable);
+}
+
 function addressFrom(r: Receipt): string | undefined {
   return (
     r.txDataDecoded?.contractAddress ??
@@ -151,10 +176,14 @@ export default async function main(client: Client): Promise<string> {
   if (!founder || !/^0x[0-9a-fA-F]{40}$/.test(founder)) {
     throw new Error("Set SHIPORSLASH_FOUNDER to the beneficiary's 0x address");
   }
+  // Which fixture directory the mirrors serve (mock_feeds, or mock_feeds_lag for
+  // the lag demonstration where only mirror A carries the record).
+  const feedDir = process.env.SHIPORSLASH_FEED_DIR ?? "mock_feeds";
+  if (!/^[a-z_]+$/.test(feedDir)) throw new Error("SHIPORSLASH_FEED_DIR must be a plain directory name");
   const feeds = {
-    a: `https://raw.githubusercontent.com/SOBEK96/ShipOrSlash/${pin}/deployments/mock_feeds/a/`,
-    b: `https://cdn.jsdelivr.net/gh/SOBEK96/ShipOrSlash@${pin}/deployments/mock_feeds/b/`,
-    c: `https://raw.githack.com/SOBEK96/ShipOrSlash/${pin}/deployments/mock_feeds/c/`,
+    a: `https://raw.githubusercontent.com/SOBEK96/ShipOrSlash/${pin}/deployments/${feedDir}/a/`,
+    b: `https://cdn.jsdelivr.net/gh/SOBEK96/ShipOrSlash@${pin}/deployments/${feedDir}/b/`,
+    c: `https://raw.githack.com/SOBEK96/ShipOrSlash/${pin}/deployments/${feedDir}/c/`,
   };
 
   // Registers the consensus contract address and ABI on the client.
@@ -200,74 +229,96 @@ export default async function main(client: Client): Promise<string> {
   record.contract_address = address;
   record.explorer_url = `https://explorer-studio-next.genlayer.com/address/${address}`;
 
-  // 2. Seed a vault with liquidity.
-  const deadline = BigInt(Math.floor(Date.now() / 1000) + DEADLINE_DAYS * 86_400);
-  const createArgs = [
-    founder,
-    "https://github.com/SOBEK96/ShipOrSlash",
-    DEMO_SIGNER_HASH,
-    "v",
-    "@sobek96/shiporslash",
-    "sobek96/shiporslash",
-    feeds.a,
-    feeds.b,
-    feeds.c,
-    deadline,
-  ];
-  const createFees = await client.estimateTransactionFeesForWrite({
-    address,
-    functionName: "create_vault",
-    args: createArgs,
-    value: SEED_WEI,
-  });
-  const createHash_ = await client.writeContract({
-    address,
-    functionName: "create_vault",
-    args: createArgs,
-    value: SEED_WEI,
-    fees: createFees,
-  });
-  const createReceipt = await client.waitForTransactionReceipt({
-    hash: createHash_,
-    waitUntil: "decided",
-    retries: RETRIES,
-    interval: INTERVAL_MS,
-  });
-  assertFinal("create_vault", createHash_, createReceipt);
-  console.log(`Seeded vault with 0.5 GEN (${createHash_})`);
-  record.seed_tx = createHash_;
-
-  const proto = plain(await client.readContract({ address, functionName: "get_protocol_state" })) as Record<string, unknown>;
-  const vaultId = Number(proto.vault_count);
-  if (!Number.isInteger(vaultId) || vaultId < 1) throw new Error("vault_count did not advance after create_vault");
+  // 2. Create the offer (unless re-running against an existing vault).
+  let vaultId: number | null = process.env.SHIPORSLASH_VAULT_ID ? Number(process.env.SHIPORSLASH_VAULT_ID) : null;
+  if (vaultId !== null && (!Number.isInteger(vaultId) || vaultId < 1)) throw new Error("SHIPORSLASH_VAULT_ID must be a positive integer");
+  if (vaultId === null) {
+    const deadline = BigInt(Math.floor(Date.now() / 1000) + DEADLINE_DAYS * 86_400);
+    const createArgs = [
+      founder,
+      "https://github.com/SOBEK96/ShipOrSlash",
+      DEMO_SIGNER_HASH,
+      "v",
+      "@sobek96/shiporslash",
+      "sobek96/shiporslash",
+      feeds.a,
+      feeds.b,
+      feeds.c,
+      deadline,
+    ];
+    const createFees = await client.estimateTransactionFeesForWrite({
+      address,
+      functionName: "create_vault",
+      args: createArgs,
+      value: SEED_WEI,
+    });
+    const createHash_ = await client.writeContract({
+      address,
+      functionName: "create_vault",
+      args: createArgs,
+      value: SEED_WEI,
+      fees: createFees,
+    });
+    const createReceipt = await client.waitForTransactionReceipt({
+      hash: createHash_,
+      waitUntil: "decided",
+      retries: RETRIES,
+      interval: INTERVAL_MS,
+    });
+    assertFinal("create_vault", createHash_, createReceipt);
+    // The id is what create_vault RETURNED, read from this transaction's own
+    // receipt -- never inferred from the global vault count.
+    vaultId = idFromReceipt(createReceipt);
+    console.log(`Created vault ${vaultId} with ${SEED_WEI} wei as an offer (${createHash_})`);
+    record.seed_tx = createHash_;
+  } else {
+    record.seed_tx = process.env.SHIPORSLASH_SEED_TX ?? null;
+  }
   record.vault_id = vaultId;
+  record.accept_tx = process.env.SHIPORSLASH_ACCEPT_TX ?? null;
 
-  // 3. Live milestone claim.
-  const claimFees = await client.estimateTransactionFeesForWrite({
-    address,
-    functionName: "claim_milestone",
-    args: [BigInt(vaultId), 1n],
-  });
-  const claimHash = await client.writeContract({
-    address,
-    functionName: "claim_milestone",
-    args: [BigInt(vaultId), 1n],
-    fees: claimFees,
-  });
-  const claimReceipt = await client.waitForTransactionReceipt({
-    hash: claimHash,
-    waitUntil: "decided",
-    retries: RETRIES,
-    interval: INTERVAL_MS,
-  });
-  assertFinal("claim_milestone", claimHash, claimReceipt);
-  console.log(`claim_milestone(${vaultId}, 1) decided (${claimHash})`);
-  record.claim_tx = claimHash;
-  record.claim_status = fact("status", [claimReceipt.statusName, claimReceipt.status], claimReceipt.status, STATUS_BY_NUMBER);
-
-  // 4. Authoritative readbacks.
   const read = async (functionName: string, args: unknown[] = []) =>
     plain(await client.readContract({ address: address as string, functionName, args }));
+  const vault = (await read("get_vault_state", [BigInt(vaultId)])) as Record<string, unknown>;
+  if (String(vault.funder).toLowerCase() === String(vault.beneficiary).toLowerCase()) throw new Error("funder and beneficiary must differ");
+  record.vault_status = vault.status;
+  console.log(`Vault ${vaultId} is ${String(vault.status)}`);
+
+  // 3. Live milestone claim -- only on an accepted vault.
+  if (vault.status === "PENDING_ACCEPTANCE") {
+    console.log(
+      `The beneficiary must accept before anything can be claimed (window closes at unix ${String(vault.accept_deadline)}):\n` +
+        `  genlayer account use shiporslash-founder\n` +
+        `  genlayer write ${address} accept_vault_terms --args ${vaultId} --fees '<estimate-fees json>'\n` +
+        `then re-run this script with SHIPORSLASH_ADDRESS=${address} SHIPORSLASH_VAULT_ID=${vaultId}.`,
+    );
+  } else if (vault.status === "ACTIVE" && Number(vault.tranches_done) === 0) {
+    const claimFees = await client.estimateTransactionFeesForWrite({
+      address,
+      functionName: "claim_milestone",
+      args: [BigInt(vaultId), 1n],
+    });
+    const claimHash = await client.writeContract({
+      address,
+      functionName: "claim_milestone",
+      args: [BigInt(vaultId), 1n],
+      fees: claimFees,
+    });
+    const claimReceipt = await client.waitForTransactionReceipt({
+      hash: claimHash,
+      waitUntil: "decided",
+      retries: RETRIES,
+      interval: INTERVAL_MS,
+    });
+    assertFinal("claim_milestone", claimHash, claimReceipt);
+    console.log(`claim_milestone(${vaultId}, 1) decided (${claimHash})`);
+    record.claim_tx = claimHash;
+    record.claim_status = fact("status", [claimReceipt.statusName, claimReceipt.status], claimReceipt.status, STATUS_BY_NUMBER);
+  } else {
+    console.log(`Nothing to claim: vault is ${String(vault.status)} with ${String(vault.tranches_done)} tranche(s) done.`);
+  }
+
+  // 4. Authoritative readbacks.
   const readbacks = {
     get_protocol_state: await read("get_protocol_state"),
     get_vault_state: await read("get_vault_state", [BigInt(vaultId)]),

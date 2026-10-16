@@ -70,6 +70,8 @@ def invariants(c):
     ps = c.get_protocol_state()
     escrow = 0
     released_sum = 0
+    cancelled_sum = 0
+    slashed_sum = 0
     for vid in range(1, ps["vault_count"] + 1):
         v = c.get_vault_state(vid)
         dep, rel = int(v["deposited"]), int(v["released"])
@@ -88,6 +90,13 @@ def invariants(c):
             assert done == 3 and rel == dep
         escrow += dep - wd - rc
         released_sum += rel
+        if v["status"] == "CANCELLED":
+            cancelled_sum += rc
+            assert rc == dep and rel == 0 and wd == 0  # a cancel returns exactly the principal
+        if v["status"] == "SLASHED":
+            slashed_sum += rc
+    assert int(ps["total_cancelled"]) == cancelled_sum
+    assert int(ps["total_slashed"]) == slashed_sum
     assert int(ps["total_escrow"]) == escrow
     assert int(ps["total_released"]) == released_sum
     return ps
@@ -348,7 +357,8 @@ def test_tranche_arithmetic_has_zero_drift(world, dep):
 
 
 @pytest.mark.parametrize("offset,ok", [
-    (-DAY, False), (0, False), (DAY - 5000, False), (DAY + 5000, True),
+    (-DAY, False), (0, False), (DAY + 5000, False), (2 * DAY + 5000, False),
+    (3 * DAY - 5000, False), (3 * DAY + 5000, True),
     (30 * DAY, True), (5 * 365 * DAY - 5000, True), (5 * 365 * DAY + 5000, False),
 ])
 def test_deadline_window(world, offset, ok):
@@ -418,8 +428,8 @@ def test_top_up_closed_vault_rejected(world, terminal):
     if terminal == "COMPLETE":
         vid = vault_at(world, 3)
     else:
-        vid = vault(world, deadline=future(2))
-        warp_to(world.vm, future(3))
+        vid = vault(world, deadline=future(4))
+        warp_to(world.vm, future(5))
         world.vm.sender = world.alice
         world.c.reclaim_unreleased(vid)
     with revert(world, "ERR_INVALID_STATE"):
@@ -468,10 +478,14 @@ def test_every_non_2xx_non_404_is_outage_not_rejection(world, status):
 
 
 @pytest.mark.parametrize("code", ["404", "410"])
-def test_404_and_410_are_missing(world, code):
+def test_404_and_410_are_lag_never_a_rejection(world, code):
+    """Nothing about a missing record proves the release is bad: it is retryable."""
     vid = vault(world)
     r = claim(world.c, world.vm, world.bob, vid, 1, (code, code, "ok"))
-    assert r["verdict"] == VERDICT_REJECTED
+    assert r["verdict"] == VERDICT_QF and r["source_count"] == 3
+    r = claim(world.c, world.vm, world.bob, vid, 1, (code, code, code))
+    assert r["verdict"] == VERDICT_QF and r["source_count"] == 3
+    assert world.c.get_vault_state(vid)["tranches_done"] == 0
 
 
 def test_garbage_body_is_outage_not_rejection(world):
@@ -520,7 +534,7 @@ def test_mirrors_attesting_different_registries_do_not_corroborate(world):
     r = claim(world.c, world.vm, world.bob, vid, 1, ("ok", "ok_docker", "503"))
     assert r["verdict"] == VERDICT_QF  # no group of two, and the silent mirror could break the tie
     r = claim(world.c, world.vm, world.bob, vid, 1, ("ok", "ok_docker", "404"))
-    assert r["verdict"] == VERDICT_REJECTED and r["released"] == "0"
+    assert r["verdict"] == VERDICT_QF and r["released"] == "0"
 
 
 def test_two_of_three_on_one_registry_still_verifies_beside_a_dissenter(world):
@@ -535,9 +549,18 @@ def conflict(m, **over):
                   artifact=dict(record(m)["artifact"], version="0.1.0-alpha.2"), **over)
 
 
-def test_two_confirmed_but_conflicting_is_rejected(world):
+def test_two_confirmed_but_conflicting_is_unproven_not_rejected(world):
+    """Disagreement between two valid confirmations is not proof the release is
+    bad (a CDN may simply be serving a stale copy), so it is retryable."""
     vid = vault(world)
     r = claim(world.c, world.vm, world.bob, vid, 1, ("ok", conflict(1), "404"))
+    assert r["verdict"] == VERDICT_QF
+    assert claim(world.c, world.vm, world.bob, vid, 1, ("ok", conflict(1), "missing"))["verdict"] == VERDICT_QF
+
+
+def test_conflict_plus_two_explicit_rejections_is_rejected(world):
+    vid = vault(world)
+    r = claim(world.c, world.vm, world.bob, vid, 1, (conflict(1), "missing", "missing"))
     assert r["verdict"] == VERDICT_REJECTED
 
 
@@ -547,12 +570,12 @@ def test_two_conflicting_plus_outage_is_retryable(world):
     assert r["verdict"] == VERDICT_QF
 
 
-def test_three_way_conflict_is_rejected(world):
+def test_three_way_conflict_is_unproven_not_rejected(world):
     vid = vault(world)
     third = record(1, release_tag="v0.1.0-alpha.3", commit_sha="8" * 40,
                    artifact=dict(record(1)["artifact"], version="0.1.0-alpha.3"))
     r = claim(world.c, world.vm, world.bob, vid, 1, ("ok", conflict(1), third))
-    assert r["verdict"] == VERDICT_REJECTED
+    assert r["verdict"] == VERDICT_QF and r["released"] == "0"
 
 
 def test_same_tag_different_commit_does_not_corroborate(world):
@@ -560,7 +583,7 @@ def test_same_tag_different_commit_does_not_corroborate(world):
     vid = vault(world)
     other = record(1, commit_sha="f" * 40)
     r = claim(world.c, world.vm, world.bob, vid, 1, ("ok", other, "404"))
-    assert r["verdict"] == VERDICT_REJECTED
+    assert r["verdict"] == VERDICT_QF and r["released"] == "0"
 
 
 def test_majority_beats_one_dissenter(world):
@@ -847,8 +870,14 @@ def test_retry_after_quorum_failure_succeeds(world):
 
 def test_retry_after_rejection_succeeds(world):
     vid = vault(world)
-    assert claim(world.c, world.vm, world.bob, vid, 1, ("404", "404", "404"))["verdict"] == 0
+    assert claim(world.c, world.vm, world.bob, vid, 1, ("missing", "missing", "missing"))["verdict"] == 0
     assert claim(world.c, world.vm, world.bob, vid, 1)["verdict"] == 1
+
+
+def test_retry_after_lag_succeeds_once_the_mirrors_catch_up(world):
+    vid = vault(world)
+    assert claim(world.c, world.vm, world.bob, vid, 1, ("ok", "404", "404"))["verdict"] == VERDICT_QF
+    assert claim(world.c, world.vm, world.bob, vid, 1, ("ok", "ok", "404"))["verdict"] == VERDICT_VERIFIED
 
 
 def test_many_outages_never_accumulate_a_penalty(world):
@@ -901,8 +930,8 @@ def test_funder_cannot_withdraw_beneficiary_funds(world):
 
 
 def test_beneficiary_cannot_reclaim(world):
-    vid = vault(world, deadline=future(2))
-    warp_to(world.vm, future(3))
+    vid = vault(world, deadline=future(4))
+    warp_to(world.vm, future(5))
     world.vm.sender = world.bob
     with revert(world, "ERR_UNAUTHORIZED"):
         world.c.reclaim_unreleased(vid)
@@ -1003,8 +1032,8 @@ def test_reclaim_before_deadline_fails(world):
 
 
 def test_reclaim_full_vault_after_deadline(world):
-    vid = vault(world, deadline=future(2))
-    warp_to(world.vm, future(3))
+    vid = vault(world, deadline=future(4))
+    warp_to(world.vm, future(5))
     world.vm.sender = world.alice
     out = world.c.reclaim_unreleased(vid)
     assert out == str(DEPOSIT)
@@ -1017,10 +1046,10 @@ def test_reclaim_full_vault_after_deadline(world):
 
 @pytest.mark.parametrize("done", [1, 2])
 def test_reclaim_after_partial_progress_only_takes_the_unshipped(world, done):
-    vid = vault(world, deadline=future(2))
+    vid = vault(world, deadline=future(4))
     for m in range(1, done + 1):
         claim(world.c, world.vm, world.bob, vid, m)
-    warp_to(world.vm, future(3))
+    warp_to(world.vm, future(5))
     world.vm.sender = world.alice
     out = int(world.c.reclaim_unreleased(vid))
     shipped = DEPOSIT * CUM[done] // 10000
@@ -1033,8 +1062,8 @@ def test_reclaim_after_partial_progress_only_takes_the_unshipped(world, done):
 
 
 def test_double_reclaim_fails(world):
-    vid = vault(world, deadline=future(2))
-    warp_to(world.vm, future(3))
+    vid = vault(world, deadline=future(4))
+    warp_to(world.vm, future(5))
     world.vm.sender = world.alice
     world.c.reclaim_unreleased(vid)
     with revert(world, "ERR_INVALID_STATE"):
@@ -1042,8 +1071,8 @@ def test_double_reclaim_fails(world):
 
 
 def test_no_claims_after_slash(world):
-    vid = vault(world, deadline=future(2))
-    warp_to(world.vm, future(3))
+    vid = vault(world, deadline=future(4))
+    warp_to(world.vm, future(5))
     world.vm.sender = world.alice
     world.c.reclaim_unreleased(vid)
     mock_feeds(world.vm, 1)
@@ -1062,15 +1091,15 @@ def test_cannot_reclaim_a_completed_vault(world):
 
 def test_claim_after_deadline_before_slash_still_wins(world):
     """The beneficiary who ships late but before the funder slashes keeps the tranche."""
-    vid = vault(world, deadline=future(2))
-    warp_to(world.vm, future(3))
+    vid = vault(world, deadline=future(4))
+    warp_to(world.vm, future(5))
     assert claim(world.c, world.vm, world.bob, vid, 1)["accepted"] is True
 
 
 def test_released_tranche_survives_the_slash_for_withdrawal(world):
-    vid = vault(world, deadline=future(2))
+    vid = vault(world, deadline=future(4))
     claim(world.c, world.vm, world.bob, vid, 1)
-    warp_to(world.vm, future(3))
+    warp_to(world.vm, future(5))
     world.vm.sender = world.alice
     world.c.reclaim_unreleased(vid)
     world.vm.sender = world.bob
@@ -1105,8 +1134,8 @@ def test_milestone_status_range(world, m):
 
 
 def test_milestone_status_reports_slashed(world):
-    vid = vault(world, deadline=future(2))
-    warp_to(world.vm, future(3))
+    vid = vault(world, deadline=future(4))
+    warp_to(world.vm, future(5))
     world.vm.sender = world.alice
     world.c.reclaim_unreleased(vid)
     assert world.c.get_milestone_status(vid, 1)["status"] == "SLASHED"
@@ -1369,7 +1398,7 @@ def test_validator_rejects_malformed_identity(world, bad):
 
 def test_validator_accepts_a_wellformed_non_verified_wrapper_with_empty_identity(world):
     vid = vault(world)
-    claim(world.c, world.vm, world.bob, vid, 1, ("404", "404", "ok"))
+    claim(world.c, world.vm, world.bob, vid, 1, ("missing", "missing", "ok"))  # two explicit rejections
     lead = {"payload": {"verdict": 0, "milestone_id": 1, "source_count": 3, "release_tag": "",
                         "verified_ts": 0}, "commit_sha": "", "artifact_digest": ""}
     assert world.vm.run_validator(leader_result=lead) is True
@@ -1430,7 +1459,7 @@ def run_sequence(w, seed):
     import random
     rng = random.Random(seed)
     dep = rng.choice([MIN_DEPOSIT, DEPOSIT, 3 * ATTO + 11, 123456789123456789])
-    vid = create(w.c, w.vm, w.alice, w.bob, value=dep, deadline=future(3))
+    vid = create(w.c, w.vm, w.alice, w.bob, value=dep, deadline=future(4))
     pools = [("ok", "ok", "ok"), ("ok", "ok", "503"), ("ok", "404", "503"), ("503", "503", "ok"),
              ("missing", "missing", "ok"), ("ok", "missing", "404"), ("404", "404", "404"),
              ("ok", "503", "ok")]
@@ -1452,7 +1481,7 @@ def run_sequence(w, seed):
             assert any(t in str(e) for t in ("ERR_NO_WITHDRAWABLE_BALANCE", "ERR_INVALID_STATE")), e
         invariants(w.c)
     # close out: slash whatever is left, withdraw whatever was earned
-    warp_to(w.vm, future(4))
+    warp_to(w.vm, future(5))
     v = w.c.get_vault_state(vid)
     if v["status"] == "ACTIVE":
         w.vm.sender = w.alice
@@ -1558,7 +1587,7 @@ def test_two_mirrors_must_agree_on_the_artifact_digest(world):
     vid = vault(world)
     a = record(1, artifact=art_with(1, digest="sha256:" + "a" * 64))
     b = record(1, artifact=art_with(1, digest="sha256:" + "b" * 64))
-    assert claim(world.c, world.vm, world.bob, vid, 1, (a, b, "404"))["verdict"] == VERDICT_REJECTED
+    assert claim(world.c, world.vm, world.bob, vid, 1, (a, b, "404"))["verdict"] == VERDICT_QF
     assert claim(world.c, world.vm, world.bob, vid, 1, (a, b, "503"))["verdict"] == VERDICT_QF
     # the third mirror breaks the tie in favour of the digest it agrees with
     r = claim(world.c, world.vm, world.bob, vid, 1, (a, b, a))
@@ -1756,6 +1785,7 @@ def test_returned_id_is_the_vault_that_was_created(world):
 
 # ===================================== clock skew on the vault minimum window ==
 T0 = 1_800_000_000
+MIN_DEADLINE = 3 * DAY  # the acceptance window (2 days) plus one full day to ship
 
 
 def _create_at(w, client_now, deadline, block_now):
@@ -1764,9 +1794,9 @@ def _create_at(w, client_now, deadline, block_now):
 
 
 def test_minimum_window_has_no_signature_age_check_to_widen(world):
-    """The contract has one 'one day' constant, and it bounds the vault DEADLINE.
-    There is no signature validity window: a mirror's verified_ts is only
-    required to be a positive integer."""
+    """The contract's day-denominated constants bound the vault DEADLINE (the
+    acceptance window plus one day). There is no signature validity window: a
+    mirror's verified_ts is only required to be a positive integer."""
     vid = vault(world)
     for ts in (1, 1_000_000, 2**40):  # ancient and far-future both accepted
         rec = record(1, verified_ts=ts)
@@ -1779,26 +1809,26 @@ def test_minimum_window_has_no_signature_age_check_to_widen(world):
 def test_deadline_exactly_at_the_minimum_is_rejected_when_the_block_is_late(world, late_by):
     """The failure a 1-day vault hits: the client computes now + 1 day, the
     transaction executes `late_by` seconds later, and the bound has moved."""
-    deadline = T0 + 86_400  # what a client clock at T0 produces for days=1
+    deadline = T0 + MIN_DEADLINE  # what a client clock at T0 produces for the minimum vault
     with revert(world, "ERR_INVALID_PARAMS"):
         _create_at(world, T0, deadline, T0 + late_by)
 
 
 @pytest.mark.parametrize("late_by", [0, 1, 30, 120, 600, 1800, 3000, 3600])
 def test_deadline_with_a_one_hour_buffer_survives_latency_and_skew(world, late_by):
-    deadline = T0 + 86_400 + 3_600
+    deadline = T0 + MIN_DEADLINE + 3_600
     assert _create_at(world, T0, deadline, T0 + late_by) == 1
 
 
 def test_the_buffer_is_a_bound_not_a_bypass(world):
-    deadline = T0 + 86_400 + 3_600
+    deadline = T0 + MIN_DEADLINE + 3_600
     with revert(world, "ERR_INVALID_PARAMS"):
         _create_at(world, T0, deadline, T0 + 3_601)
 
 
 def test_a_block_clock_behind_the_client_is_harmless(world):
     """Client ahead of the chain only lengthens the vault slightly."""
-    assert _create_at(world, T0, T0 + 86_400 + 3_600, T0 - 500) == 1
+    assert _create_at(world, T0, T0 + MIN_DEADLINE + 3_600, T0 - 500) == 1
 
 
 # ====================== JSON number spelling: what the contract accepts ======
@@ -1914,6 +1944,16 @@ def _scenarios():
         ("t2_reuses_digest_all", 2, [record(2, artifact=art_with(2, digest=DIGEST_1))] * 3),
         ("t2_reuses_digest_two_of_three", 2, [record(2, artifact=art_with(2, digest=DIGEST_1)), record(2, artifact=art_with(2, digest=DIGEST_1)), r2]),
         ("t2_reuse_with_outage", 2, [record(2, commit_sha=COMMITS[1]), r2, "503"]),
+        ("lone_confirmation_two_404", 1, [record(1), "404", "404"]),
+        ("lone_confirmation_404_outage", 1, [record(1), "404", "503"]),
+        ("lone_confirmation_two_outages", 1, [record(1), "503", "503"]),
+        ("all_404", 1, ["404", "404", "404"]),
+        ("ci_pending_lag", 1, [record(1), record(1, ci_status="pending"), record(1, ci_status="queued")]),
+        ("two_explicit_rejections_and_a_404", 1, [record(1, found=False), record(1, found=False), "404"]),
+        ("one_explicit_rejection_two_404", 1, [record(1, found=False), "404", "404"]),
+        ("ci_failure_two_mirrors", 1, [record(1, ci_status="failure"), record(1, ci_status="failure"), record(1)]),
+        ("ci_failure_one_mirror_two_confirm", 1, [record(1, ci_status="failure"), record(1), record(1)]),
+        ("confirm_and_two_explicit_rejections", 1, [record(1), record(1, found=False), record(1, found=False)]),
     ]
 
 
@@ -1949,14 +1989,18 @@ def test_quorum_scenarios_decide_as_documented(world):
     got = {v["name"]: v for v in _quorum_vectors(world)}
     want = {  # the contract's verdicts, written down independently of any vector file
         "all_agree": 1, "two_agree_one_outage": 1,
-        "digest_conflict_with_404": 0, "digest_conflict_with_outage": 2, "digest_conflict_third_breaks_tie": 1,
-        "commit_conflict_with_404": 0, "commit_conflict_with_outage": 2, "commit_third_breaks_tie": 1,
-        "registry_mismatch_with_outage": 2, "registry_mismatch_with_404": 0, "registry_majority": 1,
+        "digest_conflict_with_404": 2, "digest_conflict_with_outage": 2, "digest_conflict_third_breaks_tie": 1,
+        "commit_conflict_with_404": 2, "commit_conflict_with_outage": 2, "commit_third_breaks_tie": 1,
+        "registry_mismatch_with_outage": 2, "registry_mismatch_with_404": 2, "registry_majority": 1,
         "missing_signer_two_of_three": 0, "missing_signer_one_of_three": 1,
-        "wrong_signer_two_of_three": 0, "unsigned_two_of_three": 0, "tag_conflict_with_404": 0,
+        "wrong_signer_two_of_three": 0, "unsigned_two_of_three": 0, "tag_conflict_with_404": 2,
         "t2_clean": 1, "t2_reuses_commit_all": 0, "t2_reuses_commit_two_of_three": 0,
         "t2_reuses_commit_one_of_three": 1, "t2_reuses_digest_all": 0,
         "t2_reuses_digest_two_of_three": 0, "t2_reuse_with_outage": 2,
+        "lone_confirmation_two_404": 2, "lone_confirmation_404_outage": 2, "lone_confirmation_two_outages": 2,
+        "all_404": 2, "ci_pending_lag": 2, "two_explicit_rejections_and_a_404": 0,
+        "one_explicit_rejection_two_404": 2, "ci_failure_two_mirrors": 0,
+        "ci_failure_one_mirror_two_confirm": 1, "confirm_and_two_explicit_rejections": 0,
     }
     assert {k: v["verdict"] for k, v in got.items()} == want
 
@@ -1971,3 +2015,418 @@ def test_quorum_vectors_file_is_current(world):
             f.write("\n")
     with open(path) as f:
         assert json.load(f) == json.loads(json.dumps(doc, sort_keys=True))
+
+
+# ================== 404s and lag are retryable; only proof of failure rejects ==
+def test_milestone_claim_with_single_confirmation_and_404_lags_returns_quorum_failure(world):
+    """One mirror already carries the release; the other two have not caught up.
+    That is exactly what an honest early claim looks like, so it must be
+    retryable (QUORUM_FAILURE), never a REJECTED_MILESTONE, and the tranche must
+    be left exactly as it was."""
+    vid = vault(world)
+    before = world.c.get_vault_state(vid)
+    r = claim(world.c, world.vm, world.bob, vid, 1, ("ok", "404", "404"))
+    assert r["verdict"] == VERDICT_QF
+    assert r["accepted"] is False and r["released"] == "0" and r["release_tag"] == ""
+    assert r["source_count"] == 3  # all three answered; two said "not yet"
+    after = world.c.get_vault_state(vid)
+    assert after["tranches_done"] == before["tranches_done"] == 0
+    assert after["released"] == before["released"] == "0"
+    assert after["status"] == "ACTIVE" and after["unreleased"] == before["unreleased"]
+    assert after["last_verdict"] == VERDICT_QF  # reported as retryable, not rejected
+    # ... and the tranche is still claimable once the lagging mirrors catch up
+    assert world.c.get_milestone_status(vid, 1)["claimable_now"] is True
+    r2 = claim(world.c, world.vm, world.bob, vid, 1, ("ok", "ok", "404"))
+    assert r2["verdict"] == VERDICT_VERIFIED and r2["accepted"] is True
+
+
+@pytest.mark.parametrize("states", [
+    ("ok", "404", "404"), ("404", "ok", "404"), ("404", "404", "ok"),
+    ("ok", "410", "404"), ("ok", "404", "503"), ("ok", "503", "404"), ("ok", "503", "503"),
+    ("404", "404", "404"), ("404", "404", "503"), ("503", "503", "503"), ("none", "404", "404"),
+])
+def test_a_confirmation_or_nothing_beside_lag_is_always_quorum_failure(world, states):
+    vid = vault(world)
+    assert claim(world.c, world.vm, world.bob, vid, 1, states)["verdict"] == VERDICT_QF
+    assert world.c.get_vault_state(vid)["last_verdict"] == VERDICT_QF
+
+
+@pytest.mark.parametrize("lag", ["ci_pending", "ci_queued", "ci_in_progress", "artifact_unpublished"])
+def test_in_flight_ci_or_a_lagging_registry_is_retryable_not_rejected(world, lag):
+    """The same holds when the mirrors answer 200 but the pipeline is still running."""
+    vid = vault(world)
+    rec = record(1, artifact=art_with(1, published=False)) if lag == "artifact_unpublished" else record(1, ci_status=lag[3:])
+    assert claim(world.c, world.vm, world.bob, vid, 1, ("ok", rec, rec))["verdict"] == VERDICT_QF
+    assert claim(world.c, world.vm, world.bob, vid, 1, (rec, rec, rec))["verdict"] == VERDICT_QF
+
+
+@pytest.mark.parametrize("states", [
+    ("missing", "missing", "ok"), ("missing", "missing", "404"), ("missing", "missing", "503"),
+    ("missing", "missing", "missing"), ("ok", "missing", "missing"),
+])
+def test_two_explicit_rejections_are_positive_proof_and_reject(world, states):
+    vid = vault(world)
+    r = claim(world.c, world.vm, world.bob, vid, 1, states)
+    assert r["verdict"] == VERDICT_REJECTED and r["released"] == "0"
+
+
+@pytest.mark.parametrize("states", [
+    ("missing", "404", "404"), ("missing", "404", "503"), ("missing", "503", "503"),
+    ("missing", "ok", "404"), ("missing", "ok", "503"),
+])
+def test_one_explicit_rejection_is_not_proof(world, states):
+    vid = vault(world)
+    assert claim(world.c, world.vm, world.bob, vid, 1, states)["verdict"] == VERDICT_QF
+
+
+@pytest.mark.parametrize("name,bad", [
+    ("ci_failure", lambda: record(1, ci_status="failure")),
+    ("unsigned", lambda: record(1, signature_verified=False)),
+    ("wrong_signer", lambda: record(1, signer_fingerprint_sha256=OTHER_SIGNER_HASH)),
+    ("wrong_repo", lambda: record(1, repo_url="https://github.com/evil/fork")),
+    ("wrong_artifact", lambda: record(1, artifact=art_with(1, name="@evil/pkg"))),
+    ("found_false", lambda: record(1, found=False)),
+])
+def test_explicit_failure_records_reject_once_two_mirrors_agree_on_them(world, name, bad):
+    """A CI test failure (or any explicit rejection) is positive proof; the
+    quorum rule still needs two mirrors to say so."""
+    vid = vault(world)
+    b = bad()
+    assert claim(world.c, world.vm, world.bob, vid, 1, (b, b, "404"))["verdict"] == VERDICT_REJECTED
+    assert claim(world.c, world.vm, world.bob, vid, 1, (b, "404", "404"))["verdict"] == VERDICT_QF
+
+
+def test_lag_leaves_no_trace_beyond_the_informational_attempt_record(world):
+    vid = vault(world)
+    for _ in range(5):
+        assert claim(world.c, world.vm, world.bob, vid, 1, ("ok", "404", "404"))["verdict"] == VERDICT_QF
+    v = world.c.get_vault_state(vid)
+    assert v["attempts"] == 5 and v["released"] == "0" and v["status"] == "ACTIVE"
+    assert v["deposited"] == str(DEPOSIT) and v["reclaimed"] == "0"
+    invariants(world.c)
+
+
+def test_validator_agrees_on_a_lag_quorum_failure(world):
+    vid = vault(world)
+    claim(world.c, world.vm, world.bob, vid, 1, ("ok", "404", "404"))
+    assert world.vm.run_validator() is True  # same mocks: it sees the same lag
+    mock_feeds(world.vm, 1, ("ok", "ok", "ok"))
+    assert world.vm.run_validator() is False  # a validator that sees the quorum disagrees with the retry
+
+
+# ================================================== beneficiary acceptance window ==
+WINDOW = 2 * DAY
+
+
+def offer(w, **kw):
+    """A vault that has NOT been accepted: the funder's offer."""
+    return create(w.c, w.vm, w.alice, w.bob, accept=False, **kw)
+
+
+def accept(w, vid, who=None):
+    w.vm.sender = who if who is not None else w.bob
+    return w.c.accept_vault_terms(vid)
+
+
+def reject_terms(w, vid, who=None):
+    w.vm.sender = who if who is not None else w.bob
+    return w.c.reject_vault_terms(vid)
+
+
+def cancel(w, vid, who=None):
+    w.vm.sender = who if who is not None else w.alice
+    return w.c.cancel_vault(vid)
+
+
+def test_acceptance_constants(world):
+    k = world.c.get_constants()
+    assert k["acceptance_window"] == WINDOW == 172_800
+    assert k["min_window"] == DAY
+    assert k["min_deadline_window"] == WINDOW + DAY  # the whole window plus a full day to ship
+
+
+def test_a_new_vault_is_an_offer_not_an_active_vault(world):
+    warp_to(world.vm, T0)
+    vid = offer(world, deadline=T0 + 30 * DAY)
+    v = world.c.get_vault_state(vid)
+    assert v["status"] == "PENDING_ACCEPTANCE"
+    assert v["accept_deadline"] == T0 + WINDOW and v["accepted_at"] == 0
+    assert v["deposited"] == str(DEPOSIT) and v["unreleased"] == str(DEPOSIT)  # escrowed from the start
+    assert [t["status"] for t in v["tranches"]] == ["LOCKED", "LOCKED", "LOCKED"]
+    for m in (1, 2, 3):
+        assert world.c.get_milestone_status(vid, m)["claimable_now"] is False
+    assert invariants(world.c)["total_escrow"] == str(DEPOSIT)
+
+
+@pytest.mark.parametrize("who", ["alice", "bob"])
+def test_nothing_can_be_claimed_from_an_unaccepted_vault(world, who):
+    vid = offer(world)
+    mock_feeds(world.vm, 1)
+    world.vm.sender = getattr(world, who)
+    with revert(world, "ERR_INVALID_STATE"):
+        world.c.claim_milestone(vid, 1)
+
+
+def test_an_unaccepted_vault_cannot_be_topped_up_slashed_or_withdrawn(world):
+    vid = offer(world, deadline=future(5))
+    with revert(world, "ERR_INVALID_STATE"):
+        top_up(world, world.alice, vid, DEPOSIT)
+    world.vm.sender = world.bob
+    with revert(world, "ERR_NO_WITHDRAWABLE_BALANCE"):
+        world.c.withdraw_released(vid)
+    warp_to(world.vm, future(6))
+    world.vm.sender = world.alice
+    with revert(world, "ERR_INVALID_STATE"):
+        world.c.reclaim_unreleased(vid)  # the slash needs an ACTIVE vault
+
+
+@pytest.mark.parametrize("who", ["alice", "charlie"])
+def test_only_the_beneficiary_can_accept(world, who):
+    vid = offer(world)
+    with revert(world, "ERR_UNAUTHORIZED"):
+        accept(world, vid, getattr(world, who))
+    assert world.c.get_vault_state(vid)["status"] == "PENDING_ACCEPTANCE"
+
+
+def test_accepting_activates_the_vault_and_records_when(world):
+    warp_to(world.vm, T0)
+    vid = offer(world, deadline=T0 + 30 * DAY)
+    warp_to(world.vm, T0 + 3_600)
+    accept(world, vid)
+    v = world.c.get_vault_state(vid)
+    assert v["status"] == "ACTIVE" and v["accepted_at"] == T0 + 3_600
+    assert world.c.get_milestone_status(vid, 1)["claimable_now"] is True
+    assert claim(world.c, world.vm, world.bob, vid, 1)["accepted"] is True
+
+
+def test_accepting_twice_fails(world):
+    vid = offer(world)
+    accept(world, vid)
+    with revert(world, "ERR_INVALID_STATE"):
+        accept(world, vid)
+
+
+@pytest.mark.parametrize("offset,ok", [
+    (0, True), (1, True), (3_600, True), (WINDOW - 3_600, True), (WINDOW - 1, True), (WINDOW, True),
+    (WINDOW + 1, False), (WINDOW + 3_600, False), (WINDOW + DAY, False), (10 * DAY, False),
+])
+def test_acceptance_window_boundary(world, offset, ok):
+    warp_to(world.vm, T0)
+    vid = offer(world, deadline=T0 + 30 * DAY)
+    warp_to(world.vm, T0 + offset)
+    if ok:
+        accept(world, vid)
+        assert world.c.get_vault_state(vid)["status"] == "ACTIVE"
+    else:
+        with revert(world, "ERR_ACCEPTANCE_WINDOW"):
+            accept(world, vid)
+        assert world.c.get_vault_state(vid)["status"] == "PENDING_ACCEPTANCE"
+
+
+def test_the_beneficiary_always_has_a_full_day_after_accepting(world):
+    """Minimum deadline = window + 1 day, so accepting at the last moment still
+    leaves the minimum time to ship."""
+    warp_to(world.vm, T0)
+    deadline = T0 + WINDOW + DAY
+    vid = offer(world, deadline=deadline)
+    warp_to(world.vm, T0 + WINDOW)
+    accept(world, vid)
+    v = world.c.get_vault_state(vid)
+    assert v["deadline"] - v["accepted_at"] == DAY
+
+
+@pytest.mark.parametrize("short_by", [1, 60, 3_600, DAY])
+def test_a_deadline_without_room_for_the_window_and_a_day_is_rejected(world, short_by):
+    warp_to(world.vm, T0)
+    with revert(world, "ERR_INVALID_PARAMS"):
+        offer(world, deadline=T0 + WINDOW + DAY - short_by)
+
+
+def test_the_minimum_deadline_is_accepted(world):
+    warp_to(world.vm, T0)
+    assert offer(world, deadline=T0 + WINDOW + DAY) == 1
+
+
+# --- rejection ----------------------------------------------------------------
+@pytest.mark.parametrize("who", ["alice", "charlie"])
+def test_only_the_beneficiary_can_reject(world, who):
+    vid = offer(world)
+    with revert(world, "ERR_UNAUTHORIZED"):
+        reject_terms(world, vid, getattr(world, who))
+
+
+def test_rejecting_closes_the_offer_to_acceptance_and_claims(world):
+    vid = offer(world)
+    reject_terms(world, vid)
+    assert world.c.get_vault_state(vid)["status"] == "REJECTED"
+    with revert(world, "ERR_INVALID_STATE"):
+        accept(world, vid)
+    with revert(world, "ERR_INVALID_STATE"):
+        reject_terms(world, vid)
+    mock_feeds(world.vm, 1)
+    world.vm.sender = world.bob
+    with revert(world, "ERR_INVALID_STATE"):
+        world.c.claim_milestone(vid, 1)
+
+
+def test_an_accepted_vault_cannot_be_rejected(world):
+    vid = offer(world)
+    accept(world, vid)
+    with revert(world, "ERR_INVALID_STATE"):
+        reject_terms(world, vid)
+
+
+# --- the funder's exit: 100% of the principal, no penalty ---------------------
+@pytest.mark.parametrize("dep", [MIN_DEPOSIT, MIN_DEPOSIT + 1, DEPOSIT, 3 * ATTO + 7, 2**64 + 1])
+def test_funder_recovers_every_wei_after_a_rejection(world, dep):
+    vid = offer(world, value=dep)
+    reject_terms(world, vid)
+    assert cancel(world, vid) == str(dep)
+    v = world.c.get_vault_state(vid)
+    assert v["status"] == "CANCELLED" and v["reclaimed"] == str(dep)
+    assert v["unreleased"] == "0" and v["released"] == "0" and v["withdrawn"] == "0"
+    ps = invariants(world.c)
+    assert ps["total_escrow"] == "0" and ps["total_cancelled"] == str(dep) and ps["total_slashed"] == "0"
+
+
+@pytest.mark.parametrize("dep", [MIN_DEPOSIT, DEPOSIT, 2**64 + 1])
+def test_funder_recovers_every_wei_when_the_window_lapses_unanswered(world, dep):
+    warp_to(world.vm, T0)
+    vid = offer(world, value=dep, deadline=T0 + 30 * DAY)
+    warp_to(world.vm, T0 + WINDOW + 1)
+    assert cancel(world, vid) == str(dep)
+    assert world.c.get_vault_state(vid)["status"] == "CANCELLED"
+    assert invariants(world.c)["total_escrow"] == "0"
+
+
+def test_the_funder_cannot_withdraw_the_offer_while_the_window_is_open(world):
+    """The beneficiary is owed the whole window to inspect the feeds."""
+    warp_to(world.vm, T0)
+    vid = offer(world, deadline=T0 + 30 * DAY)
+    for offset in (0, 1, DAY, WINDOW - 1, WINDOW):  # WINDOW itself is still the beneficiary's
+        warp_to(world.vm, T0 + offset)
+        with revert(world, "ERR_ACCEPTANCE_WINDOW"):
+            cancel(world, vid)
+    assert world.c.get_vault_state(vid)["status"] == "PENDING_ACCEPTANCE"
+
+
+def test_accept_and_cancel_never_both_open_at_the_same_second(world):
+    warp_to(world.vm, T0)
+    vid = offer(world, deadline=T0 + 30 * DAY)
+    warp_to(world.vm, T0 + WINDOW)
+    with revert(world, "ERR_ACCEPTANCE_WINDOW"):
+        cancel(world, vid)  # still the beneficiary's second
+    warp_to(world.vm, T0 + WINDOW + 1)
+    with revert(world, "ERR_ACCEPTANCE_WINDOW"):
+        accept(world, vid)  # now it is the funder's
+    assert cancel(world, vid) == str(DEPOSIT)
+
+
+@pytest.mark.parametrize("who", ["bob", "charlie"])
+def test_only_the_funder_can_cancel(world, who):
+    vid = offer(world)
+    reject_terms(world, vid)
+    with revert(world, "ERR_UNAUTHORIZED"):
+        cancel(world, vid, getattr(world, who))
+
+
+def test_cancelling_twice_fails_and_pays_once(world):
+    vid = offer(world)
+    reject_terms(world, vid)
+    cancel(world, vid)
+    with revert(world, "ERR_INVALID_STATE"):
+        cancel(world, vid)
+    assert invariants(world.c)["total_cancelled"] == str(DEPOSIT)
+
+
+@pytest.mark.parametrize("terminal", ["ACTIVE", "COMPLETE", "SLASHED"])
+def test_an_accepted_vault_cannot_be_cancelled(world, terminal):
+    if terminal == "ACTIVE":
+        vid = vault(world)
+    elif terminal == "COMPLETE":
+        vid = vault_at(world, 3)
+    else:
+        vid = vault(world, deadline=future(4))
+        warp_to(world.vm, future(5))
+        world.vm.sender = world.alice
+        world.c.reclaim_unreleased(vid)
+    with revert(world, "ERR_INVALID_STATE"):
+        cancel(world, vid)
+
+
+def test_a_cancelled_vault_is_dead(world):
+    vid = offer(world)
+    reject_terms(world, vid)
+    cancel(world, vid)
+    with revert(world, "ERR_INVALID_STATE"):
+        accept(world, vid)
+    with revert(world, "ERR_INVALID_STATE"):
+        top_up(world, world.alice, vid, DEPOSIT)
+    v = world.c.get_vault_state(vid)
+    assert [t["status"] for t in v["tranches"]] == ["CANCELLED"] * 3
+    assert world.c.get_milestone_status(vid, 1)["status"] == "CANCELLED"
+    assert world.c.get_milestone_status(vid, 1)["claimable_now"] is False
+
+
+def test_vaults_are_independent_through_the_offer_lifecycle(world):
+    a = offer(world)            # will be accepted
+    b = offer(world)            # will be rejected and cancelled
+    c = offer(world)            # left pending
+    accept(world, a)
+    reject_terms(world, b)
+    cancel(world, b)
+    s = [world.c.get_vault_state(i)["status"] for i in (a, b, c)]
+    assert s == ["ACTIVE", "CANCELLED", "PENDING_ACCEPTANCE"]
+    assert claim(world.c, world.vm, world.bob, a, 1)["accepted"] is True
+    ps = invariants(world.c)
+    assert ps["total_escrow"] == str(2 * DEPOSIT)  # a and c are still escrowed; b went back
+    assert ps["total_cancelled"] == str(DEPOSIT)
+
+
+def test_the_registry_the_beneficiary_accepted_is_the_one_in_force(world):
+    """Nothing about the offer can change between creation and acceptance."""
+    vid = offer(world)
+    before = world.c.get_vault_state(vid)
+    after_view = world.c.get_verifier_sources(vid)
+    accept(world, vid)
+    v = world.c.get_vault_state(vid)
+    for k in ("repo_url", "signer_hash", "tag_prefix", "npm_package", "docker_image", "feeds",
+              "funder", "beneficiary", "deposited", "deadline", "created_at", "accept_deadline"):
+        assert v[k] == before[k], k
+    assert world.c.get_verifier_sources(vid)["sources"] == after_view["sources"]
+
+
+@pytest.mark.parametrize("seed", range(12))
+def test_random_offer_lifecycles_conserve_value(world, seed):
+    import random
+    rng = random.Random(1000 + seed)
+    warp_to(world.vm, T0)
+    ids = []
+    for _ in range(rng.randint(2, 5)):
+        ids.append(offer(world, value=rng.choice([MIN_DEPOSIT, DEPOSIT, 3 * ATTO + 11]), deadline=T0 + 30 * DAY))
+    now = T0
+    for _ in range(rng.randint(8, 20)):
+        vid = rng.choice(ids)
+        op = rng.choice(["accept", "reject", "cancel", "wait", "claim"])
+        try:
+            if op == "accept":
+                accept(world, vid)
+            elif op == "reject":
+                reject_terms(world, vid)
+            elif op == "cancel":
+                cancel(world, vid)
+            elif op == "wait":
+                now += rng.choice([3_600, DAY, WINDOW, WINDOW + 5])
+                warp_to(world.vm, now)
+            else:
+                claim(world.c, world.vm, world.bob, vid, world.c.get_vault_state(vid)["tranches_done"] + 1)
+        except Exception as e:
+            assert any(t in str(e) for t in (
+                "ERR_INVALID_STATE", "ERR_ACCEPTANCE_WINDOW", "ERR_UNAUTHORIZED", "ERR_MILESTONE_OUT_OF_SEQUENCE",
+            )), e
+        invariants(world.c)
+        # nothing is ever claimable from a vault that was not accepted
+        for i in ids:
+            v = world.c.get_vault_state(i)
+            if v["accepted_at"] == 0:
+                assert v["tranches_done"] == 0 and v["released"] == "0"
