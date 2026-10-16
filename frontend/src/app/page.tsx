@@ -108,6 +108,9 @@ export default function Home() {
             onWithdraw={() => void c.withdraw()}
             onReclaim={() => void c.reclaim()}
             onTopUp={(w) => void c.topUp(w)}
+            onAccept={() => void c.acceptTerms()}
+            onReject={() => void c.rejectTerms()}
+            onCancel={() => void c.cancelVault()}
             onDismiss={c.dismissNotice}
           />
         </div>

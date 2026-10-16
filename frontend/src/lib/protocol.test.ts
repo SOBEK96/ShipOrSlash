@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  ACCEPTANCE_WINDOW_S,
+  MIN_DEADLINE_DAYS,
+  MIN_DEADLINE_S,
+  MIN_WINDOW_S,
   assessFeeds,
   canonHash,
   checkTag,
@@ -265,15 +269,15 @@ describe("verifier feeds", () => {
 });
 
 describe("quorum outlook (all 64 source-state combinations)", () => {
-  // Independent oracle, written from the specification.
+  // Independent oracle written from the rule: two agreeing confirmations
+  // verify; two EXPLICIT rejections reject; everything else is unproven and
+  // retryable. 404 / in-flight CI (NOT_FOUND) and outages prove nothing.
   function oracle(s: SourceState[]): 0 | 1 | 2 {
     const c = s.filter((x) => x === "CONFIRMED").length;
-    const f = s.filter((x) => x === "FAILED" || x === "NOT_FOUND").length;
-    const o = s.filter((x) => x === "OUTAGE").length;
-    if (c + f < 2) return 2;
+    const f = s.filter((x) => x === "FAILED").length;
     if (c >= 2) return 1;
     if (f >= 2) return 0;
-    return o >= 1 && (c + o >= 2 || f + o >= 2) ? 2 : 0;
+    return 2;
   }
   const all: SourceState[] = ["CONFIRMED", "FAILED", "NOT_FOUND", "OUTAGE"];
   const combos: SourceState[][] = [];
@@ -283,7 +287,30 @@ describe("quorum outlook (all 64 source-state combinations)", () => {
     expect(quorumOutlook([a, b, c])).toBe(oracle([a, b, c]));
   });
 
-  it("matches the specification's headline case", () => {
+  it("the headline case: one confirmation, one 404, one outage is retryable", () => {
     expect(quorumOutlook(["CONFIRMED", "NOT_FOUND", "OUTAGE"])).toBe(2);
+  });
+
+  it("a lone confirmation beside two 404s is retryable, not rejected", () => {
+    expect(quorumOutlook(["CONFIRMED", "NOT_FOUND", "NOT_FOUND"])).toBe(2);
+  });
+
+  it("three 404s are retryable, not rejected", () => {
+    expect(quorumOutlook(["NOT_FOUND", "NOT_FOUND", "NOT_FOUND"])).toBe(2);
+  });
+
+  it("only two explicit rejections reject", () => {
+    expect(quorumOutlook(["FAILED", "FAILED", "NOT_FOUND"])).toBe(0);
+    expect(quorumOutlook(["FAILED", "NOT_FOUND", "NOT_FOUND"])).toBe(2);
+    expect(quorumOutlook(["FAILED", "CONFIRMED", "NOT_FOUND"])).toBe(2);
+  });
+});
+
+describe("window constants", () => {
+  it("the minimum deadline is the acceptance window plus one full day", () => {
+    expect(ACCEPTANCE_WINDOW_S).toBe(172_800);
+    expect(MIN_WINDOW_S).toBe(86_400);
+    expect(MIN_DEADLINE_S).toBe(ACCEPTANCE_WINDOW_S + MIN_WINDOW_S);
+    expect(MIN_DEADLINE_DAYS).toBe(3);
   });
 });

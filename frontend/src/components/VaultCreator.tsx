@@ -6,7 +6,8 @@ import { formatGen, isAddress, parseGen, sameAddress } from "@/lib/format";
 import {
   MAX_WINDOW_S,
   MIN_DEPOSIT,
-  MIN_WINDOW_S,
+  MIN_DEADLINE_DAYS,
+  MIN_DEADLINE_S,
   assessFeeds,
   canonHash,
   fingerprintHash,
@@ -90,7 +91,7 @@ export function VaultCreator({
             : null,
       feeds,
       daysError:
-        !Number.isFinite(d) || secs < MIN_WINDOW_S || secs > MAX_WINDOW_S ? "Choose 1 to 1825 days." : null,
+        !Number.isFinite(d) || secs < MIN_DEADLINE_S || secs > MAX_WINDOW_S ? `Choose ${MIN_DEADLINE_DAYS} to 1825 days.` : null,
       days: d,
       split: dep !== null && dep >= MIN_DEPOSIT ? trancheAmounts(dep) : null,
     };
@@ -127,7 +128,7 @@ export function VaultCreator({
   return (
     <Card
       id="create"
-      title="Create a vault"
+      title="Create a vault offer"
       aside={<Pill tone="muted">registry is immutable once created</Pill>}
     >
       <form
@@ -137,6 +138,12 @@ export function VaultCreator({
           submit();
         }}
       >
+        <p className="rounded-md border border-hold/50 bg-hold-soft px-3 py-2 text-xs text-hold-ink">
+          <strong>This creates an offer, not a live vault.</strong> You choose the repository, the signer and the three
+          verifier mirrors, so the beneficiary gets 48 hours to inspect them and accept. Your deposit is escrowed meanwhile.
+          If they reject it or let the window lapse, you can cancel and recover the whole deposit with no penalty.
+        </p>
+
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Beneficiary wallet" error={check.benError} hint="The project that earns the tranches.">
             <input className={inputClass} value={beneficiary} onChange={(e) => setBeneficiary(e.target.value.trim())} placeholder="0x…" spellCheck={false} />
@@ -214,12 +221,12 @@ export function VaultCreator({
           <Field
             label="Deadline (days from now)"
             error={check.daysError}
-            hint="After this, the funder may slash unshipped tranches. One hour is added so the deadline clears the one-day minimum after network delay."
+            hint="After this, the funder may slash unshipped tranches. The minimum is 3 days: the 48-hour acceptance window plus one full day to ship. One hour is added so the deadline still clears that after network delay."
           >
             <input className={`${inputClass} w-28`} inputMode="numeric" value={days} onChange={(e) => setDays(e.target.value.trim())} />
           </Field>
           <Button type="submit" tone="primary" disabled={!valid || busy !== null}>
-            {busy === "Creating vault" ? "Creating vault…" : "Create vault and deposit"}
+            {busy === "Creating vault" ? "Creating offer…" : "Create offer and deposit"}
           </Button>
         </div>
         {account === null ? <p className="text-xs text-muted">Connect a wallet to create a vault.</p> : null}

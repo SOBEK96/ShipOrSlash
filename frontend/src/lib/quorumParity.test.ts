@@ -76,13 +76,37 @@ describe("quorum scenarios: the preview reaches the contract's verdict", () => {
     (name) => {
       const sc = doc.scenarios.find((s) => s.name === name)!;
       expect(sc).toBeDefined();
-      expect(sc.verdict).toBe(0);
+      expect(sc.verdict).not.toBe(1);
       const ctx: VerifyContext = {
         repo: sc.context.repo, signer: sc.context.signer, prefix: sc.context.prefix, npm: sc.context.npm,
         docker: sc.context.docker, milestone: sc.tranche, previousTag: sc.context.previous_tag,
         usedCommits: sc.context.used_commits, usedDigests: sc.context.used_digests,
       };
       expect(corroborate(sc.bodies.map((b) => read(b, ctx))).verdict).not.toBe(1);
+    },
+  );
+});
+
+describe("lag scenarios: a missing record is never previewed as a rejection", () => {
+  it.each([
+    "lone_confirmation_two_404", "lone_confirmation_404_outage", "lone_confirmation_two_outages", "all_404",
+    "ci_pending_lag", "one_explicit_rejection_two_404", "digest_conflict_with_404", "commit_conflict_with_404",
+  ])("%s is retryable", (name) => {
+    const sc = doc.scenarios.find((x) => x.name === name)!;
+    expect(sc, name).toBeDefined();
+    expect(sc.verdict).toBe(2);
+    const ctx: VerifyContext = {
+      repo: sc.context.repo, signer: sc.context.signer, prefix: sc.context.prefix, npm: sc.context.npm,
+      docker: sc.context.docker, milestone: sc.tranche, previousTag: sc.context.previous_tag,
+      usedCommits: sc.context.used_commits, usedDigests: sc.context.used_digests,
+    };
+    expect(corroborate(sc.bodies.map((b) => read(b, ctx))).verdict).toBe(2);
+  });
+
+  it.each(["two_explicit_rejections_and_a_404", "ci_failure_two_mirrors", "confirm_and_two_explicit_rejections"])(
+    "%s is positive proof and rejects",
+    (name) => {
+      expect(doc.scenarios.find((x) => x.name === name)!.verdict).toBe(0);
     },
   );
 });

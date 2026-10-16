@@ -15,7 +15,15 @@ export type MilestoneId = 1 | 2 | 3;
 
 export const ATTO = 10n ** 18n;
 export const MIN_DEPOSIT = ATTO / 1000n; // 0.001 GEN
+/** The beneficiary has this long to inspect and accept a new vault. */
+export const ACCEPTANCE_WINDOW_S = 2 * 86_400;
+/** Once accepted, a vault still runs at least this long. */
 export const MIN_WINDOW_S = 86_400;
+/** A new vault's deadline must leave the whole acceptance window usable and a
+ * full day after it, so accepting at the last moment never leaves less than
+ * MIN_WINDOW_S to ship. */
+export const MIN_DEADLINE_S = ACCEPTANCE_WINDOW_S + MIN_WINDOW_S;
+export const MIN_DEADLINE_DAYS = MIN_DEADLINE_S / 86_400;
 export const MAX_WINDOW_S = 5 * 365 * 86_400;
 export const QUORUM = 2;
 export const SOURCES = 3;
@@ -309,15 +317,17 @@ export function assessFeeds(urls: readonly [string, string, string]): FeedAssess
 export type SourceState = "CONFIRMED" | "FAILED" | "NOT_FOUND" | "OUTAGE";
 
 /** The verdict the contract would reach for these per-source states, assuming
- * all confirmed sources agree on the release. Used by the radar to show what a
- * partial picture means before the chain says so. */
+ * all confirmed sources agree on the release.
+ *
+ * Two agreeing confirmations verify. Two EXPLICIT rejections (FAILED: the mirror
+ * answered and its record says the release is invalid) reject. Everything else
+ * is unproven either way and is retryable. NOT_FOUND (404, CI still running,
+ * package not yet published) and OUTAGE are lag: they prove nothing, so a
+ * missing record is never a rejection. */
 export function quorumOutlook(states: readonly SourceState[]): Verdict {
   const c = states.filter((s) => s === "CONFIRMED").length;
-  const f = states.filter((s) => s === "FAILED" || s === "NOT_FOUND").length;
-  const o = states.filter((s) => s === "OUTAGE").length;
-  if (c + f < QUORUM) return VERDICT.QUORUM_FAILURE;
+  const f = states.filter((s) => s === "FAILED").length;
   if (c >= QUORUM) return VERDICT.VERIFIED;
   if (f >= QUORUM) return VERDICT.REJECTED;
-  if (o >= 1 && (c + o >= QUORUM || f + o >= QUORUM)) return VERDICT.QUORUM_FAILURE;
-  return VERDICT.REJECTED;
+  return VERDICT.QUORUM_FAILURE;
 }

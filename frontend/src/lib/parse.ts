@@ -79,8 +79,11 @@ function arr(o: Obj, k: string): PlainValue[] {
   return v;
 }
 
-export type TrancheStatus = "ACCEPTED" | "PENDING" | "LOCKED" | "SLASHED";
-export type VaultStatus = "ACTIVE" | "COMPLETE" | "SLASHED";
+export type TrancheStatus = "ACCEPTED" | "PENDING" | "LOCKED" | "SLASHED" | "CANCELLED";
+/** PENDING_ACCEPTANCE is an offer: the beneficiary has not yet accepted the
+ * funder's registry and mirrors. REJECTED and CANCELLED end it with the
+ * principal returned to the funder. */
+export type VaultStatus = "PENDING_ACCEPTANCE" | "ACTIVE" | "COMPLETE" | "SLASHED" | "REJECTED" | "CANCELLED";
 
 export interface Tranche {
   milestoneId: MilestoneId;
@@ -107,6 +110,10 @@ export interface VaultState {
   feeds: [string, string, string];
   deadline: number;
   createdAt: number;
+  /** The offer lapses (the funder may cancel) after this. */
+  acceptDeadline: number;
+  /** 0 until the beneficiary accepts. */
+  acceptedAt: number;
   deposited: bigint;
   released: bigint;
   withdrawn: bigint;
@@ -122,8 +129,8 @@ export interface VaultState {
   tranches: [Tranche, Tranche, Tranche];
 }
 
-const TRANCHE_STATUSES: readonly string[] = ["ACCEPTED", "PENDING", "LOCKED", "SLASHED"];
-const VAULT_STATUSES: readonly string[] = ["ACTIVE", "COMPLETE", "SLASHED"];
+const TRANCHE_STATUSES: readonly string[] = ["ACCEPTED", "PENDING", "LOCKED", "SLASHED", "CANCELLED"];
+const VAULT_STATUSES: readonly string[] = ["PENDING_ACCEPTANCE", "ACTIVE", "COMPLETE", "SLASHED", "REJECTED", "CANCELLED"];
 const KINDS: readonly string[] = ["ALPHA", "RC", "STABLE"];
 
 function parseTranche(v: PlainValue, expectId: MilestoneId): Tranche {
@@ -170,6 +177,8 @@ export function parseVaultState(raw: unknown): VaultState {
     feeds: [feeds[0] as string, feeds[1] as string, feeds[2] as string],
     deadline: int(o, "deadline"),
     createdAt: int(o, "created_at"),
+    acceptDeadline: int(o, "accept_deadline"),
+    acceptedAt: int(o, "accepted_at"),
     deposited: wei(o, "deposited"),
     released: wei(o, "released"),
     withdrawn: wei(o, "withdrawn"),
@@ -282,6 +291,7 @@ export interface ProtocolState {
   totalEscrow: bigint;
   totalReleased: bigint;
   totalSlashed: bigint;
+  totalCancelled: bigint;
   contractBalance: bigint;
   solvent: boolean;
 }
@@ -294,6 +304,7 @@ export function parseProtocolState(raw: unknown): ProtocolState {
     totalEscrow: wei(o, "total_escrow"),
     totalReleased: wei(o, "total_released"),
     totalSlashed: wei(o, "total_slashed"),
+    totalCancelled: wei(o, "total_cancelled"),
     contractBalance: wei(o, "contract_balance"),
     solvent: bool(o, "solvent"),
   };

@@ -35,6 +35,8 @@ const vault = (over: Record<string, unknown> = {}) => ({
   feeds: ["https://a.example.org/", "https://b.example.net/", "https://c.example.io/"],
   deadline: 1_794_682_476,
   created_at: 1_792_090_476,
+  accept_deadline: 1_792_263_276,
+  accepted_at: 0,
   deposited: "500000000000000000",
   released: "0",
   withdrawn: "0",
@@ -86,6 +88,25 @@ describe("parseVaultState", () => {
     expect(v.deposited).toBe(500_000_000_000_000_000n);
     expect(v.tranches.map((t) => t.status)).toEqual(["PENDING", "LOCKED", "LOCKED"]);
     expect(v.tagPrefix).toBe("v");
+  });
+
+  it.each(["PENDING_ACCEPTANCE", "ACTIVE", "COMPLETE", "SLASHED", "REJECTED", "CANCELLED"])("accepts vault status %s", (status) => {
+    expect(parseVaultState(vault({ status })).status).toBe(status);
+  });
+
+  it("reads the acceptance window", () => {
+    const v = parseVaultState(vault({ status: "PENDING_ACCEPTANCE", accepted_at: 0 }));
+    expect(v.acceptDeadline).toBe(1_792_263_276);
+    expect(v.acceptedAt).toBe(0);
+  });
+
+  it("accepts the CANCELLED tranche status of a rejected or cancelled vault", () => {
+    const t = (id: number) => tranche(id, { status: "CANCELLED" });
+    expect(parseVaultState(vault({ status: "CANCELLED", tranches: [t(1), t(2), t(3)] })).tranches[0].status).toBe("CANCELLED");
+  });
+
+  it.each(["accept_deadline", "accepted_at"])("rejects a vault view missing %s", (k) => {
+    expect(() => parseVaultState(vault({ [k]: undefined }))).toThrow(ParseError);
   });
 
   it("parses plain objects too", () => {
@@ -186,6 +207,7 @@ describe("parseProtocolState and parseClaimResult", () => {
       total_escrow: "1000",
       total_released: "0",
       total_slashed: "0",
+      total_cancelled: "0",
       contract_balance: "1000",
       solvent: true,
     });

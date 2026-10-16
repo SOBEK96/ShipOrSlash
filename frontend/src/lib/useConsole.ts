@@ -269,6 +269,39 @@ export function useConsole() {
     [client, run, selected],
   );
 
+  const acceptTerms = useCallback(() => {
+    if (selected === null) return Promise.resolve();
+    const id = selected;
+    return run(
+      "Accepting terms",
+      id,
+      () => client.acceptVaultTerms(id),
+      "Terms accepted. The vault is active and its registry is now binding.",
+    );
+  }, [client, run, selected]);
+
+  const rejectTerms = useCallback(() => {
+    if (selected === null) return Promise.resolve();
+    const id = selected;
+    return run(
+      "Rejecting terms",
+      id,
+      () => client.rejectVaultTerms(id),
+      "Terms rejected. The funder can now cancel and recover the full principal.",
+    );
+  }, [client, run, selected]);
+
+  const cancelVault = useCallback(() => {
+    if (selected === null) return Promise.resolve();
+    const id = selected;
+    return run(
+      "Cancelling vault",
+      id,
+      () => client.cancelVault(id),
+      "Vault cancelled and the full principal released back to the funder. The refund is a separate network transfer: confirm it in your wallet balance. Studio Next has been observed not to deliver contract payouts.",
+    );
+  }, [client, run, selected]);
+
   const withdraw = useCallback(() => {
     if (selected === null) return Promise.resolve();
     const id = selected;
@@ -338,6 +371,9 @@ export function useConsole() {
     disconnect,
     createVault,
     claim,
+    acceptTerms,
+    rejectTerms,
+    cancelVault,
     withdraw,
     reclaim,
     topUp,

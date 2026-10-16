@@ -375,6 +375,21 @@ export class ShipOrSlashClient {
     return this.send("claim_milestone", [BigInt(vaultId), BigInt(milestone)]);
   }
 
+  /** The beneficiary accepts the funder's registry and mirrors. */
+  acceptVaultTerms(vaultId: number): Promise<WriteOutcome> {
+    return this.send("accept_vault_terms", [BigInt(vaultId)]);
+  }
+
+  /** The beneficiary declines; the funder can then cancel at once. */
+  rejectVaultTerms(vaultId: number): Promise<WriteOutcome> {
+    return this.send("reject_vault_terms", [BigInt(vaultId)]);
+  }
+
+  /** The funder recovers 100% of the principal after a rejection or a lapsed window. */
+  cancelVault(vaultId: number): Promise<WriteOutcome> {
+    return this.send("cancel_vault", [BigInt(vaultId)]);
+  }
+
   withdrawReleased(vaultId: number): Promise<WriteOutcome> {
     return this.send("withdraw_released", [BigInt(vaultId)]);
   }

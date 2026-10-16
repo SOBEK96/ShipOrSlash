@@ -1,11 +1,12 @@
 /**
  * Choosing a vault deadline that the contract will accept.
  *
- * The contract requires  now_block + 1 day <= deadline <= now_block + 5 years,
- * where now_block is the clock of the block that EXECUTES the transaction. A
- * client that signs `now + 1 day` is already late by the time consensus runs
- * (seconds to minutes), so a one-day vault built from the client's own clock
- * is rejected -- on the boundary, by design. Two corrections:
+ * The contract requires  now_block + 3 days <= deadline <= now_block + 5 years
+ * (the 48-hour acceptance window plus one full day to ship), where now_block is
+ * the clock of the block that EXECUTES the transaction. A client that signs
+ * `now + 3 days` is already late by the time consensus runs (seconds to
+ * minutes), so a minimum-length vault built from the client's own clock is
+ * rejected -- on the boundary, by design. Two corrections:
  *
  *   - read the chain's clock and use the later of it and the client's, so a
  *     client whose clock runs behind the chain does not under-shoot;
@@ -18,7 +19,7 @@
  * the caller instead.
  */
 
-import { MAX_WINDOW_S } from "./protocol";
+import { MAX_WINDOW_S, MIN_DEADLINE_DAYS } from "./protocol";
 
 /** Default allowance for client/chain clock drift and consensus latency. */
 export const DEADLINE_SKEW_BUFFER_S = 3_600;
@@ -35,7 +36,9 @@ export interface DeadlineInput {
 /** The deadline to submit: later-of-clocks + days + buffer, never beyond the
  * contract's five-year ceiling measured from the same base. */
 export function computeDeadline({ days, clientNow, chainNow, bufferS = DEADLINE_SKEW_BUFFER_S }: DeadlineInput): number {
-  if (!Number.isInteger(days) || days < 1) throw new RangeError("days must be a whole number of at least 1");
+  if (!Number.isInteger(days) || days < MIN_DEADLINE_DAYS) {
+    throw new RangeError(`days must be a whole number of at least ${MIN_DEADLINE_DAYS}`);
+  }
   const base = Math.max(clientNow, chainNow ?? 0);
   // Block time only moves forward, so a ceiling measured from the earlier
   // `base` is always satisfied by the later block that runs the transaction.

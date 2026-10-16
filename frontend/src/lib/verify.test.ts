@@ -169,8 +169,10 @@ describe("corroborate (direct port of _aggregate)", () => {
     expect(r.sourceCount).toBe(2);
   });
 
-  it("does not corroborate the same tag on different commits", () => {
-    expect(corroborate([c("v1", "a"), c("v1", "b"), s("NOT_FOUND")]).verdict).toBe(0);
+  it("does not corroborate the same tag on different commits; the disagreement is unproven, so retryable", () => {
+    const r = corroborate([c("v1", "a"), c("v1", "b"), s("NOT_FOUND")]);
+    expect(r.verdict).toBe(2);
+    expect(r.conflict).toBe(true);
   });
 
   it("retries when a conflict could still be broken by the silent mirror", () => {
@@ -186,8 +188,27 @@ describe("corroborate (direct port of _aggregate)", () => {
     expect(corroborate([s("OUTAGE"), s("OUTAGE"), s("OUTAGE")]).verdict).toBe(2);
   });
 
-  it("two failures reject even with one confirmation", () => {
-    expect(corroborate([c(), s("FAILED"), s("NOT_FOUND")]).verdict).toBe(0);
+  it("two explicit rejections reject even beside one confirmation", () => {
+    expect(corroborate([c(), s("FAILED"), s("FAILED")]).verdict).toBe(0);
+  });
+
+  it("one explicit rejection and a 404 is not proof: retryable", () => {
+    expect(corroborate([c(), s("FAILED"), s("NOT_FOUND")]).verdict).toBe(2);
+    expect(corroborate([s("FAILED"), s("NOT_FOUND"), s("NOT_FOUND")]).verdict).toBe(2);
+  });
+
+  it("a lone confirmation beside two 404s is retryable, never rejected", () => {
+    const r = corroborate([c(), s("NOT_FOUND"), s("NOT_FOUND")]);
+    expect(r.verdict).toBe(2);
+    expect(r.sourceCount).toBe(3);
+  });
+
+  it("three 404s are retryable, never rejected", () => {
+    expect(corroborate([s("NOT_FOUND"), s("NOT_FOUND"), s("NOT_FOUND")]).verdict).toBe(2);
+  });
+
+  it("two 404s are lag; a 404 plus an explicit rejection plus a confirmation is retryable", () => {
+    expect(corroborate([c(), s("NOT_FOUND"), s("FAILED")]).verdict).toBe(2);
   });
 
   it("majority beats a dissenter", () => {
@@ -198,7 +219,7 @@ describe("corroborate (direct port of _aggregate)", () => {
 
   it("does not corroborate the same tag and commit with different artifact digests", () => {
     const r = corroborate([c("v1", "a", 10n, DIGEST), c("v1", "a", 10n, D2), s("NOT_FOUND")]);
-    expect(r.verdict).toBe(0);
+    expect(r.verdict).toBe(2);
     expect(r.conflict).toBe(true);
   });
 
@@ -216,7 +237,7 @@ describe("corroborate (direct port of _aggregate)", () => {
   });
 
   it("does not corroborate mirrors that attest different registries", () => {
-    expect(corroborate([c("v1", "a", 10n, DIGEST, "npm"), c("v1", "a", 10n, DIGEST, "docker"), s("NOT_FOUND")]).verdict).toBe(0);
+    expect(corroborate([c("v1", "a", 10n, DIGEST, "npm"), c("v1", "a", 10n, DIGEST, "docker"), s("NOT_FOUND")]).verdict).toBe(2);
   });
 
   it("reports the verified identity", () => {

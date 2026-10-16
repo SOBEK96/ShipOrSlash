@@ -70,6 +70,7 @@ describe("ShipOrSlashClient", () => {
       ["total_escrow", "5"],
       ["total_released", "0"],
       ["total_slashed", "0"],
+      ["total_cancelled", "0"],
       ["contract_balance", "5"],
       ["solvent", true],
     ]);
@@ -185,7 +186,7 @@ const input = {
 /** A get_vault_state answer, as the SDK would decode it. */
 const vaultView = (id: number, over: Record<string, unknown> = {}) => ({
   vault_id: id, status: "ACTIVE", funder: ACCT_A.toLowerCase(), beneficiary: FOUNDER.toLowerCase(),
-  repo_url: "https://github.com/sobek96/shiporslash", signer_hash: "d".repeat(64), tag_prefix: "v",
+  repo_url: "https://github.com/sobek96/shiporslash", signer_hash: "d".repeat(64), tag_prefix: "v", accept_deadline: 1_700_172_800, accepted_at: 0,
   npm_package: "p", docker_image: "", feeds: ["a", "b", "c"], deadline: 2_000_000_000, created_at: 1_700_000_000,
   deposited: "500000000000000000", released: "0", withdrawn: "0", reclaimed: "0", withdrawable: "0",
   unreleased: "500000000000000000", tranches_done: 0, attempts: 0, last_verdict: 0, last_source_count: 0,
@@ -262,10 +263,10 @@ describe("ShipOrSlashClient.createVault", () => {
       readFor = { get_vault_state: vaultView(1) };
       const c = new ShipOrSlashClient();
       await c.connect(provider([ACCT_A]).p);
-      const out = await c.createVault({ ...input, deadlineDays: 1 });
-      expect(out.deadline).toBe(chainNow + 86_400 + 3_600);
+      const out = await c.createVault({ ...input, deadlineDays: 3 });
+      expect(out.deadline).toBe(chainNow + 3 * 86_400 + 3_600);
       const w = written.find((x) => x.functionName === "create_vault")!;
-      expect(w.args![9]).toBe(BigInt(chainNow + 86_400 + 3_600));
+      expect(w.args![9]).toBe(BigInt(chainNow + 3 * 86_400 + 3_600));
       expect(w.value).toBe(5n * 10n ** 17n);
     } finally {
       globalThis.fetch = realFetch;
@@ -283,11 +284,47 @@ describe("ShipOrSlashClient.createVault", () => {
       const c = new ShipOrSlashClient();
       await c.connect(provider([ACCT_A]).p);
       const before = Math.floor(Date.now() / 1000);
-      const out = await c.createVault({ ...input, deadlineDays: 1 });
-      expect(out.deadline).toBeGreaterThanOrEqual(before + 86_400 + 3_600);
-      expect(out.deadline).toBeLessThanOrEqual(before + 86_400 + 3_600 + 5);
+      const out = await c.createVault({ ...input, deadlineDays: 3 });
+      expect(out.deadline).toBeGreaterThanOrEqual(before + 3 * 86_400 + 3_600);
+      expect(out.deadline).toBeLessThanOrEqual(before + 3 * 86_400 + 3_600 + 5);
     } finally {
       globalThis.fetch = realFetch;
     }
+  });
+});
+
+describe("offer lifecycle writes", () => {
+  it.each([
+    ["accept_vault_terms", (c: ShipOrSlashClient) => c.acceptVaultTerms(4)],
+    ["reject_vault_terms", (c: ShipOrSlashClient) => c.rejectVaultTerms(4)],
+    ["cancel_vault", (c: ShipOrSlashClient) => c.cancelVault(4)],
+  ])("%s estimates fees, writes with them, waits and checks the receipt", async (fn, call) => {
+    const c = new ShipOrSlashClient();
+    await c.connect(provider([ACCT_A]).p);
+    const out = await call(c);
+    expect(out.hash).toBe("0xhash");
+    expect(calls).toEqual([`estimate:${fn}:0`, `write:${fn}:{"feeValue":"1"}`, "wait"]);
+    expect(written[0]).toMatchObject({ functionName: fn, args: [4n] });
+  });
+
+  it.each([
+    ["acceptVaultTerms"],
+    ["rejectVaultTerms"],
+    ["cancelVault"],
+  ] as const)("%s refuses to send without a wallet", async (method) => {
+    const c = new ShipOrSlashClient();
+    await expect(c[method](1)).rejects.toBeInstanceOf(ContractUnavailableError);
+    expect(calls).toEqual([]);
+  });
+
+  it.each([
+    [{ statusName: "PENDING" }, /not decided/],
+    [{ txExecutionResultName: "FINISHED_WITH_ERROR" }, /did not return normally/],
+    [{ resultName: "NO_MAJORITY" }, /majority/],
+  ])("does not report an accept as done on a bad receipt %#", async (patch, msg) => {
+    receipt = { ...ok, ...patch };
+    const c = new ShipOrSlashClient();
+    await c.connect(provider([ACCT_B]).p);
+    await expect(c.acceptVaultTerms(1)).rejects.toThrow(msg);
   });
 });

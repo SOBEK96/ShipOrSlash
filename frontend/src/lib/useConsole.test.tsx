@@ -36,6 +36,7 @@ const script = {
   read: (_id: number, _key: string): Promise<unknown> => Promise.resolve(null),
   reads: [] as string[],
   claim: (_id: number): Promise<{ hash: string }> => Promise.resolve({ hash: "0xhash" }),
+  offer: (_kind: "accept" | "reject" | "cancel", _id: number): Promise<{ hash: string }> => Promise.resolve({ hash: "0xoffer" }),
   create: (): Promise<{ hash: string; vaultId: number | null; vaultIdProblem?: string; deadline: number }> =>
     Promise.resolve({ hash: "0xc", vaultId: 1, deadline: 0 }),
 };
@@ -63,6 +64,9 @@ vi.mock("./contract", async () => {
       });
     }
     claimMilestone = (id: number) => script.claim(id);
+    acceptVaultTerms = (id: number) => script.offer("accept", id);
+    rejectVaultTerms = (id: number) => script.offer("reject", id);
+    cancelVault = (id: number) => script.offer("cancel", id);
     withdrawReleased = async () => ({ hash: "0x" });
     reclaimUnreleased = async () => ({ hash: "0x" });
     topUpVault = async () => ({ hash: "0x" });
@@ -220,6 +224,94 @@ describe("useConsole: creating a vault", () => {
     await flush();
     expect(result.current.vaultId).toBeNull();
     expect(result.current.notice?.kind).toBe("error");
+  });
+});
+
+describe("useConsole: the offer lifecycle", () => {
+  it.each([
+    ["accept", "acceptTerms", /Terms accepted/],
+    ["reject", "rejectTerms", /Terms rejected/],
+    ["cancel", "cancelVault", /Vault cancelled and the full principal/],
+  ] as const)("%s runs for the selected vault and reports it", async (kind, method, msg) => {
+    const seen: [string, number][] = [];
+    script.offer = (k, id) => {
+      seen.push([k, id]);
+      return Promise.resolve({ hash: "0xoffer" });
+    };
+    const { result } = renderHook(() => useConsole());
+    act(() => result.current.selectVault(2));
+    await flush();
+    await act(async () => {
+      await result.current[method]();
+    });
+    await flush();
+    expect(seen).toEqual([[kind, 2]]);
+    expect(result.current.notice?.kind).toBe("success");
+    expect(result.current.notice?.message).toMatch(msg);
+    expect(result.current.notice?.hash).toBe("0xoffer");
+  });
+
+  it("the cancel notice does not claim the refund arrived", async () => {
+    const { result } = renderHook(() => useConsole());
+    act(() => result.current.selectVault(1));
+    await flush();
+    await act(async () => {
+      await result.current.cancelVault();
+    });
+    expect(result.current.notice?.message).toMatch(/separate network transfer/);
+    expect(result.current.notice?.message).toMatch(/confirm it in your wallet balance/);
+  });
+
+  it("surfaces the contract's refusal, for example a closed window", async () => {
+    script.offer = () => Promise.reject(new Error("ERR_ACCEPTANCE_WINDOW the acceptance window has closed"));
+    const { result } = renderHook(() => useConsole());
+    act(() => result.current.selectVault(1));
+    await flush();
+    await act(async () => {
+      await result.current.acceptTerms();
+    });
+    expect(result.current.notice?.kind).toBe("error");
+    expect(result.current.notice?.message).toMatch(/acceptance window has closed/);
+    expect(result.current.busy).toBeNull();
+  });
+
+  it("does nothing without a selected vault", async () => {
+    const seen: string[] = [];
+    script.offer = (k) => {
+      seen.push(k);
+      return Promise.resolve({ hash: "0x" });
+    };
+    const { result } = renderHook(() => useConsole());
+    await flush();
+    await act(async () => {
+      await result.current.acceptTerms();
+      await result.current.rejectTerms();
+      await result.current.cancelVault();
+    });
+    expect(seen).toEqual([]);
+  });
+
+  it("a transaction finishing after the user switched vaults refreshes ITS vault, not the one on screen", async () => {
+    const tx = defer<{ hash: string }>();
+    script.offer = () => tx.promise;
+    const { result } = renderHook(() => useConsole());
+    act(() => result.current.selectVault(1));
+    await flush();
+    let pending: Promise<void> | undefined;
+    act(() => {
+      pending = result.current.acceptTerms() as Promise<void>;
+    });
+    await flush();
+    act(() => result.current.selectVault(2));
+    await flush();
+    await act(async () => {
+      tx.resolve({ hash: "0xabc" });
+      await pending;
+    });
+    await flush();
+    expect(result.current.vaultId).toBe(2);
+    expect(result.current.data.vault?.vaultId).toBe(2);
+    expect(script.reads.filter((r) => r.startsWith("1:vault")).length).toBeGreaterThanOrEqual(2);
   });
 });
 

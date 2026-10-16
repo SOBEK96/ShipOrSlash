@@ -24,6 +24,8 @@ const mk = (over: Partial<VaultState> = {}): VaultState => ({
   feeds: ["https://a.example.org/", "https://b.example.net/", "https://c.example.io/"],
   deadline: 2_000_000_000,
   createdAt: 1_700_000_000,
+  acceptDeadline: 1_700_172_800,
+  acceptedAt: 1_700_000_100,
   deposited: 5n * 10n ** 17n,
   released: 10n ** 17n,
   withdrawn: 0n,
@@ -166,6 +168,9 @@ const deskProps = {
   onWithdraw: vi.fn(),
   onReclaim: vi.fn(),
   onTopUp: vi.fn(),
+  onAccept: vi.fn(),
+  onReject: vi.fn(),
+  onCancel: vi.fn(),
   onDismiss: vi.fn(),
 };
 
@@ -241,7 +246,7 @@ describe("ClaimTrancheDesk", () => {
 
 describe("VaultCreator", () => {
   const props = { account: "0x2bd806c97f0e00af1a1fc3328fa763a9269723c8", busy: null, onCreate: vi.fn() };
-  const submit = () => screen.getByRole("button", { name: /Create vault and deposit/ }) as HTMLButtonElement;
+  const submit = () => screen.getByRole("button", { name: /Create offer and deposit/ }) as HTMLButtonElement;
 
   it("starts disabled until a beneficiary is entered", () => {
     render(<VaultCreator {...props} />);
@@ -315,5 +320,166 @@ describe("static content", () => {
     const a = screen.getByTitle(ADDR) as HTMLAnchorElement;
     expect(a.href).toBe(`https://explorer-studio-next.genlayer.com/address/${ADDR}`);
     expect(screen.getByText(/chain 61997/)).toBeTruthy();
+  });
+});
+
+// ---------------------------------------------------------------- offer ------
+const OFFER_START = 1_700_000_000;
+const offerVault = (over: Partial<VaultState> = {}) =>
+  mk({
+    status: "PENDING_ACCEPTANCE",
+    acceptedAt: 0,
+    acceptDeadline: OFFER_START + 172_800,
+    released: 0n,
+    withdrawable: 0n,
+    unreleased: 5n * 10n ** 17n,
+    tranchesDone: 0,
+    tranches: [
+      { milestoneId: 1, kind: "ALPHA", bps: 2000, status: "LOCKED", releaseTag: "", commitSha: "", artifactDigest: "", verifiedTs: 0, amount: 10n ** 17n },
+      { milestoneId: 2, kind: "RC", bps: 3000, status: "LOCKED", releaseTag: "", commitSha: "", artifactDigest: "", verifiedTs: 0, amount: 15n * 10n ** 16n },
+      { milestoneId: 3, kind: "STABLE", bps: 5000, status: "LOCKED", releaseTag: "", commitSha: "", artifactDigest: "", verifiedTs: 0, amount: 25n * 10n ** 16n },
+    ],
+    ...over,
+  });
+
+const btn = (name: RegExp) => screen.getByRole("button", { name }) as HTMLButtonElement;
+
+describe("ClaimTrancheDesk: a vault that is only an offer", () => {
+  const within = OFFER_START + 3_600; // an hour in
+  const lapsedAt = OFFER_START + 172_801; // one second after the window
+
+  it("shows the beneficiary what to inspect and lets them accept or reject", () => {
+    const onAccept = vi.fn();
+    const onReject = vi.fn();
+    render(<ClaimTrancheDesk {...deskProps} vault={offerVault()} role="beneficiary" nowSeconds={within} onAccept={onAccept} onReject={onReject} />);
+    expect(screen.getByText(/Inspect before you accept/)).toBeTruthy();
+    expect(screen.getByText(/contract cannot tell whether a host is under the funder/)).toBeTruthy();
+    expect(screen.getByText(/Acceptance window: 1d 23h left/)).toBeTruthy();
+    fireEvent.click(btn(/Accept terms/));
+    fireEvent.click(btn(/Reject terms/));
+    expect(onAccept).toHaveBeenCalledOnce();
+    expect(onReject).toHaveBeenCalledOnce();
+  });
+
+  it("offers no claim, withdraw or slash controls while it is only an offer", () => {
+    render(<ClaimTrancheDesk {...deskProps} vault={offerVault()} role="beneficiary" nowSeconds={within} />);
+    expect(screen.queryByRole("button", { name: /Verify tranche/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Withdraw" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Slash unshipped/ })).toBeNull();
+  });
+
+  it("disables acceptance once the window has closed, but still allows a rejection", () => {
+    render(<ClaimTrancheDesk {...deskProps} vault={offerVault()} role="beneficiary" nowSeconds={lapsedAt} />);
+    expect(btn(/Accept terms/).disabled).toBe(true);
+    expect(btn(/Reject terms/).disabled).toBe(false);
+    expect(screen.getByText(/acceptance window has closed/)).toBeTruthy();
+  });
+
+  it("keeps acceptance open at the exact last second (the contract allows it)", () => {
+    render(<ClaimTrancheDesk {...deskProps} vault={offerVault()} role="beneficiary" nowSeconds={OFFER_START + 172_800} />);
+    expect(btn(/Accept terms/).disabled).toBe(false);
+  });
+
+  it("only the beneficiary can accept or reject", () => {
+    for (const role of ["funder", "viewer"] as const) {
+      cleanup();
+      render(<ClaimTrancheDesk {...deskProps} vault={offerVault()} role={role} nowSeconds={within} />);
+      expect(btn(/Accept terms/).disabled).toBe(true);
+      expect(btn(/Reject terms/).disabled).toBe(true);
+    }
+  });
+
+  it("will not let the funder cancel while the window is open, and says why", () => {
+    render(<ClaimTrancheDesk {...deskProps} vault={offerVault()} role="funder" nowSeconds={within} />);
+    expect(btn(/Cancel and recover/).disabled).toBe(true);
+    expect(screen.getByText(/owed the full time to\s+inspect the mirrors/)).toBeTruthy();
+  });
+
+  it("lets the funder cancel for the whole principal once the window lapses", () => {
+    const onCancel = vi.fn();
+    render(<ClaimTrancheDesk {...deskProps} vault={offerVault()} role="funder" nowSeconds={lapsedAt} onCancel={onCancel} />);
+    expect(btn(/Cancel and recover 0.5 GEN/).disabled).toBe(false);
+    fireEvent.click(btn(/Cancel and recover/));
+    expect(onCancel).toHaveBeenCalledOnce();
+  });
+
+  it("lets the funder cancel at once after a rejection", () => {
+    render(<ClaimTrancheDesk {...deskProps} vault={offerVault({ status: "REJECTED" })} role="funder" nowSeconds={within} />);
+    expect(btn(/Cancel and recover/).disabled).toBe(false);
+    expect(screen.getByText(/beneficiary rejected these terms/)).toBeTruthy();
+  });
+
+  it("only the funder can cancel a rejected offer", () => {
+    render(<ClaimTrancheDesk {...deskProps} vault={offerVault({ status: "REJECTED" })} role="beneficiary" nowSeconds={within} />);
+    expect(btn(/Cancel and recover/).disabled).toBe(true);
+  });
+
+  it("describes a cancelled vault and offers nothing further", () => {
+    render(<ClaimTrancheDesk {...deskProps} vault={offerVault({ status: "CANCELLED" })} role="funder" nowSeconds={within} />);
+    expect(screen.getByText(/cancelled before it was accepted/)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Accept terms|Reject terms|Cancel and recover/ })).toBeNull();
+  });
+
+  it("disables everything while a transaction is in flight", () => {
+    render(<ClaimTrancheDesk {...deskProps} vault={offerVault()} role="beneficiary" nowSeconds={within} busy="Accepting terms" />);
+    expect(btn(/Accept terms/).disabled).toBe(true);
+    expect(btn(/Reject terms/).disabled).toBe(true);
+  });
+
+  it("asks a disconnected visitor to connect", () => {
+    render(<ClaimTrancheDesk {...deskProps} vault={offerVault()} role="viewer" connected={false} nowSeconds={within} />);
+    expect(screen.getByText(/Connect a wallet to act on this vault/)).toBeTruthy();
+  });
+
+  it("an accepted vault shows the normal claim desk again", () => {
+    render(<ClaimTrancheDesk {...deskProps} vault={mk({ status: "ACTIVE" })} role="beneficiary" />);
+    expect(screen.queryByText(/Inspect before you accept/)).toBeNull();
+    expect(screen.getByRole("button", { name: /Verify tranche 2/ })).toBeTruthy();
+  });
+});
+
+describe("MilestoneTracker: an unaccepted vault", () => {
+  it("tells the beneficiary the mirrors are the funder's and links each file to inspect", () => {
+    render(<MilestoneTracker vault={offerVault()} sources={sources} milestones={{}} />);
+    expect(screen.getByText(/These three mirrors were chosen by the funder/)).toBeTruthy();
+    const links = screen.getAllByRole("link").filter((a) => (a as HTMLAnchorElement).href.endsWith("milestone_1.json"));
+    expect(links).toHaveLength(3);
+    expect(screen.getByText("PENDING ACCEPTANCE")).toBeTruthy();
+  });
+
+  it("does not show that notice once the vault is active", () => {
+    render(<MilestoneTracker vault={mk()} sources={sources} milestones={{ 2: ms(2) }} />);
+    expect(screen.queryByText(/chosen by the funder/)).toBeNull();
+  });
+
+  it("renders cancelled tranches", () => {
+    const v = offerVault({
+      status: "CANCELLED",
+      tranches: offerVault().tranches.map((t) => ({ ...t, status: "CANCELLED" as const })) as VaultState["tranches"],
+    });
+    render(<MilestoneTracker vault={v} sources={sources} milestones={{}} />);
+    expect(screen.getAllByText("CANCELLED").length).toBeGreaterThanOrEqual(3);
+  });
+});
+
+describe("VaultCreator: the offer model", () => {
+  const props = { account: "0x2bd806c97f0e00af1a1fc3328fa763a9269723c8", busy: null, onCreate: vi.fn() };
+
+  it("says it creates an offer and what the funder can recover", () => {
+    render(<VaultCreator {...props} />);
+    expect(screen.getByText(/creates an offer, not a live vault/)).toBeTruthy();
+    expect(screen.getByText(/recover the whole deposit with no penalty/)).toBeTruthy();
+  });
+
+  it.each(["1", "2", "0", "abc"])("rejects a %s-day deadline (the minimum is 3)", (days) => {
+    render(<VaultCreator {...props} />);
+    fireEvent.change(screen.getByDisplayValue("30"), { target: { value: days } });
+    expect(screen.getAllByRole("alert").map((a) => a.textContent).join(" ")).toMatch(/Choose 3 to 1825 days/);
+  });
+
+  it("accepts the 3-day minimum", () => {
+    render(<VaultCreator {...props} />);
+    fireEvent.change(screen.getByDisplayValue("30"), { target: { value: "3" } });
+    expect(screen.queryAllByRole("alert").map((a) => a.textContent).join(" ")).not.toMatch(/Choose 3 to 1825 days/);
   });
 });

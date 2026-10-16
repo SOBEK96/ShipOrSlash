@@ -12,7 +12,14 @@ const STATUS_TONE: Record<string, Tone> = {
   PENDING: "hold",
   LOCKED: "muted",
   SLASHED: "slash",
+  CANCELLED: "slash",
 };
+
+function vaultTone(status: string): Tone {
+  if (status === "COMPLETE") return "ship";
+  if (status === "ACTIVE" || status === "PENDING_ACCEPTANCE") return "hold";
+  return "slash";
+}
 
 const STATE_TONE: Record<SourceReading["state"], Tone> = {
   CONFIRMED: "ship",
@@ -29,9 +36,12 @@ const STATE_LABEL: Record<SourceReading["state"], string> = {
 };
 
 const VERDICT_COPY: Record<number, { tone: Tone; text: string }> = {
-  0: { tone: "slash", text: "Rejected: the contract would not release this tranche." },
+  0: { tone: "slash", text: "Rejected: two or more mirrors explicitly report this release as invalid." },
   1: { tone: "ship", text: "Verified: two or more mirrors corroborate the same signed release." },
-  2: { tone: "hold", text: "Retryable: the quorum cannot be reached yet. Nothing is penalised." },
+  2: {
+    tone: "hold",
+    text: "Retryable: not enough proof either way yet (a mirror is lagging, still building or unreachable). Nothing is rejected or penalised.",
+  },
 };
 
 /**
@@ -103,9 +113,7 @@ export function MilestoneTracker({
       <Card
         title="Tranche ledger"
         aside={
-          <Pill tone={vault.status === "ACTIVE" ? "hold" : vault.status === "COMPLETE" ? "ship" : "slash"}>
-            {vault.status}
-          </Pill>
+          <Pill tone={vaultTone(vault.status)}>{vault.status.replace("_", " ")}</Pill>
         }
       >
         <dl className="mb-4 grid gap-x-6 gap-y-1 text-xs sm:grid-cols-2">
@@ -183,6 +191,25 @@ export function MilestoneTracker({
       >
         {sources ? (
           <>
+            {vault.status === "PENDING_ACCEPTANCE" ? (
+              <div className="mb-3 rounded-md border border-hold/50 bg-hold-soft px-3 py-2 text-xs text-hold-ink">
+                <p className="font-semibold">These three mirrors were chosen by the funder.</p>
+                <p className="mt-0.5">
+                  Open each tranche-1 file and confirm you trust the host, that it is not run by the funder, and that
+                  it serves an immutable, commit-pinned file:
+                </p>
+                <ul className="mt-1 space-y-0.5 font-mono">
+                  {sources.sources.map((s) => (
+                    <li key={s.slot} className="truncate">
+                      {s.slot}:{" "}
+                      <a href={`${s.baseUrl}milestone_1.json`} target="_blank" rel="noreferrer">
+                        {s.baseUrl}milestone_1.json
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
             <ul className="grid gap-3 md:grid-cols-3">
               {sources.sources.map((s, i) => {
                 const r = current?.[i];

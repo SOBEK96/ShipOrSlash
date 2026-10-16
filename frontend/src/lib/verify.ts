@@ -203,14 +203,13 @@ export interface Corroboration {
 
 /** Direct port of the contract's five-step `_aggregate`:
  *  1. tally  2. fewer than two answered -> retry  3. two confirmations that
- *  agree on (tag, commit, registry, digest) -> verified  4. two failed/missing
- *  -> rejected  5. otherwise retry only if the unreachable source could still
- *  complete a quorum. */
+ *  agree on (tag, commit, registry, digest) -> verified  4. two EXPLICIT
+ *  rejections -> rejected  5. everything else is unproven (lag, outage,
+ *  disagreement) -> retry. */
 export function corroborate(readings: readonly SourceReading[]): Corroboration {
   const confirmed = readings.filter((r) => r.state === "CONFIRMED");
   const failed = readings.filter((r) => r.state === "FAILED").length;
   const missing = readings.filter((r) => r.state === "NOT_FOUND").length;
-  const outage = readings.filter((r) => r.state === "OUTAGE").length;
   const responded = confirmed.length + failed + missing;
 
   const groups = new Map<string, SourceReading[]>();
@@ -240,9 +239,9 @@ export function corroborate(readings: readonly SourceReading[]): Corroboration {
     const first = best[0]!;
     return out(VERDICT.VERIFIED, first.tag, first.commit, first.digest, best.reduce((m, r) => (r.ts < m ? r.ts : m), first.ts));
   }
-  if (failed + missing >= QUORUM) return out(VERDICT.REJECTED);
-  if (outage >= 1 && (best.length + outage >= QUORUM || failed + missing + outage >= QUORUM)) {
-    return out(VERDICT.QUORUM_FAILURE);
-  }
-  return out(VERDICT.REJECTED);
+  // Only positive proof rejects: two mirrors whose records explicitly say the
+  // release is invalid. A 404, in-flight CI, an unpublished package, an outage,
+  // or mirrors that merely disagree prove nothing, so they are retryable.
+  if (failed >= QUORUM) return out(VERDICT.REJECTED);
+  return out(VERDICT.QUORUM_FAILURE);
 }
