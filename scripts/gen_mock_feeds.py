@@ -69,7 +69,22 @@ def record(slot: str, milestone: int) -> dict:
     }
 
 
+def write_lag_demo() -> None:
+    """A deliberately lagging feed set: the milestone-1 record exists on mirror A
+    only, so B and C answer 404. A claim against it sees 1 confirmed + 2 x 404,
+    which the contract must report as QUORUM_FAILURE (retryable), not a
+    rejection. Used for a live demonstration of the lag rule."""
+    d = os.path.join(os.path.dirname(ROOT), "mock_feeds_lag", "a")
+    os.makedirs(d, exist_ok=True)
+    path = os.path.join(d, "milestone_1.json")
+    with open(path, "w") as f:
+        json.dump(record("a", 1), f, indent=2, sort_keys=True)
+        f.write("\n")
+    print("wrote", os.path.relpath(path), "(mirrors b and c intentionally absent)")
+
+
 def main() -> None:
+    write_lag_demo()
     for slot in SLOTS:
         d = os.path.join(ROOT, slot)
         os.makedirs(d, exist_ok=True)
